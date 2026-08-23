@@ -19,7 +19,12 @@ export function validateEnv(): Env {
     process.exit(1);
   }
 
-  return env.data;
+  const data = env.data;
+  if (data.MOLIT_SERVICE_KEY) {
+    data.MOLIT_SERVICE_KEY = decodeURIComponent(data.MOLIT_SERVICE_KEY);
+  }
+
+  return data;
 }
 
 export const config = validateEnv();
