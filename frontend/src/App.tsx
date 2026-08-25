@@ -14,6 +14,8 @@ interface EstateData {
   location: string
 }
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [estates, setEstates] = useState<EstateData[]>([])
@@ -24,8 +26,8 @@ function App() {
     async function fetchData() {
       try {
         const [healthRes, estatesRes] = await Promise.all([
-          fetch('/api/health'),
-          fetch('/api/estates'),
+          fetch(`${API_URL}/api/health`),
+          fetch(`${API_URL}/api/estates`),
         ])
 
         if (!healthRes.ok || !estatesRes.ok) {
