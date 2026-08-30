@@ -1,8 +1,12 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { config } from './config/env.js';
 import { fetchMolitData } from './services/molit.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 
@@ -14,6 +18,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type'],
 }));
 app.use(express.json());
+
+app.use(express.static(join(__dirname, '../../frontend/dist')));
 
 // Routes
 app.get('/', (_, res) => {
