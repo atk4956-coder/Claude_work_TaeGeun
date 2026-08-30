@@ -86,3 +86,55 @@ p {
 .info {
   border-left: 4px solid #4caf50;
 }
+
+.control-panel {
+  border-left: 4px solid #ff9800;
+}
+
+.control-panel select {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  min-width: 150px;
+}
+
+.control-panel select:hover {
+  border-color: #667eea;
+}
+
+.stats-grid {
+  border-left: 4px solid #2196f3;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.chart-section {
+  border-left: 4px solid #9c27b0;
+}

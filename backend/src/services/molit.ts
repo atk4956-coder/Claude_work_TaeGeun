@@ -95,11 +95,34 @@ function formatDate(dateStr: string): string {
 }
 
 function getMockData(): EstateData[] {
-  return [
-    { date: '2024-01-15', price: 80.0, area: 84.95, location: '서울시 강남구' },
-    { date: '2024-01-10', price: 75.0, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-12-28', price: 82.0, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-12-20', price: 78.5, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-12-15', price: 81.0, area: 84.95, location: '서울시 강남구' },
+  // 최근 3개월 데이터 (2024-11 ~ 2024-01 역순)
+  const data: EstateData[] = [
+    // 2024년 1월
+    { date: '2024-01-28', price: 850000, area: 84.95, location: '서울시 강남구' },
+    { date: '2024-01-25', price: 820000, area: 59.80, location: '서울시 서초구' },
+    { date: '2024-01-22', price: 780000, area: 84.95, location: '서울시 강남구' },
+    { date: '2024-01-18', price: 810000, area: 101.50, location: '서울시 서초구' },
+    { date: '2024-01-15', price: 800000, area: 84.95, location: '서울시 강남구' },
+    { date: '2024-01-10', price: 750000, area: 59.80, location: '서울시 서초구' },
+    { date: '2024-01-08', price: 790000, area: 84.95, location: '서울시 강남구' },
+    { date: '2024-01-05', price: 820000, area: 101.50, location: '서울시 서초구' },
+
+    // 2023년 12월
+    { date: '2023-12-28', price: 820000, area: 84.95, location: '서울시 강남구' },
+    { date: '2023-12-25', price: 800000, area: 59.80, location: '서울시 서초구' },
+    { date: '2023-12-20', price: 785000, area: 84.95, location: '서울시 강남구' },
+    { date: '2023-12-15', price: 810000, area: 101.50, location: '서울시 서초구' },
+    { date: '2023-12-10', price: 780000, area: 84.95, location: '서울시 강남구' },
+    { date: '2023-12-05', price: 795000, area: 59.80, location: '서울시 서초구' },
+
+    // 2023년 11월
+    { date: '2023-11-28', price: 800000, area: 84.95, location: '서울시 강남구' },
+    { date: '2023-11-25', price: 810000, area: 59.80, location: '서울시 서초구' },
+    { date: '2023-11-20', price: 795000, area: 84.95, location: '서울시 강남구' },
+    { date: '2023-11-15', price: 825000, area: 101.50, location: '서울시 서초구' },
+    { date: '2023-11-10', price: 805000, area: 84.95, location: '서울시 강남구' },
+    { date: '2023-11-05', price: 790000, area: 59.80, location: '서울시 서초구' },
   ];
+
+  return data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }

@@ -41,6 +41,40 @@ app.get('/api/estates', async (req, res) => {
   }
 });
 
+app.get('/api/stats', async (req, res) => {
+  try {
+    const { region } = req.query;
+    const data = await fetchMolitData(region as string, 'apts', 1);
+
+    if (data.length === 0) {
+      return res.json({ success: true, stats: null });
+    }
+
+    const prices = data.map(d => d.price);
+    const areas = data.map(d => d.area);
+
+    const stats = {
+      totalDeals: data.length,
+      avgPrice: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+      maxPrice: Math.max(...prices),
+      minPrice: Math.min(...prices),
+      avgArea: Math.round(areas.reduce((a, b) => a + b, 0) / areas.length * 100) / 100,
+      maxArea: Math.max(...areas),
+      minArea: Math.min(...areas),
+      pricePerArea: Math.round((prices.reduce((a, b) => a + b, 0) / areas.reduce((a, b) => a + b, 0)) * 100) / 100,
+      locations: [...new Set(data.map(d => d.location))].length,
+    };
+
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // Start server
 const PORT = config.BACKEND_PORT;
 app.listen(PORT, () => {
