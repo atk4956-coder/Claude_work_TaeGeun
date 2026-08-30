@@ -6,7 +6,8 @@ import { dirname, join } from 'path';
 import { config } from './config/env.js';
 import { fetchMolitData } from './services/molit.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 
@@ -19,7 +20,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.use(express.static(join(__dirname, '../../frontend/dist')));
+// 프론트엔드 정적 파일 서빙
+const frontendPath = join(__dirname, '../../frontend/dist');
+console.log(`[Init] Frontend path: ${frontendPath}`);
+app.use(express.static(frontendPath));
 
 // Routes
 app.get('/', (_, res) => {
