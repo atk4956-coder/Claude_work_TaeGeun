@@ -21,7 +21,9 @@ app.use(cors({
 app.use(express.json());
 
 // 프론트엔드 정적 파일 서빙
-const frontendPath = join(__dirname, '../../frontend/dist');
+const cwd = process.cwd();
+const frontendPath = join(cwd, 'frontend/dist');
+console.log(`[Init] CWD: ${cwd}`);
 console.log(`[Init] Frontend path: ${frontendPath}`);
 app.use(express.static(frontendPath));
 
