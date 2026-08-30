@@ -16,7 +16,19 @@ app.use(cors({
 app.use(express.json());
 
 // Routes
-app.get('/api/health', (req, res) => {
+app.get('/', (_, res) => {
+  res.json({
+    message: 'Real Estate Market Analytics API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      estates: '/api/estates',
+      stats: '/api/stats',
+    },
+  });
+});
+
+app.get('/api/health', (_, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
