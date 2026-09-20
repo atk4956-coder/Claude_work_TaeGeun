@@ -167,7 +167,24 @@ function getMockData(region: string = '서울'): EstateData[] {
   ];
 
   // 요청 지역에 따라 데이터 선택
-  const baseData = region.includes('경기') ? gyeonggiData : seoulData;
+  // 경기도 지역: 경기도, 경기, 성남, 수원, 고양, 용인, 안산, 안양, 부천, 평택, 화성
+  const isGyeonggi = region.includes('경기') ||
+                     region.includes('성남') ||
+                     region.includes('수원') ||
+                     region.includes('고양') ||
+                     region.includes('용인') ||
+                     region.includes('안산') ||
+                     region.includes('안양') ||
+                     region.includes('부천') ||
+                     region.includes('평택') ||
+                     region.includes('화성') ||
+                     region.includes('김포') ||
+                     region.includes('광명') ||
+                     region.includes('하남') ||
+                     region.includes('오산') ||
+                     region.includes('의정부') ||
+                     region.includes('남양주');
+  const baseData = isGyeonggi ? gyeonggiData : seoulData;
 
   // location에서 지역/도시 이름 추출
   const data: EstateData[] = baseData.map(item => ({
