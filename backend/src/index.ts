@@ -67,16 +67,18 @@ app.get('/api/estates', async (req, res) => {
     const { region, limit } = req.query;
     const regionStr = region as string || '서울';
 
-    // Check if DB is empty and auto-load if needed
-    const dbCheck = await getLatestEstates(1, undefined);
-    if (dbCheck.length === 0) {
-      console.log('[API] Database empty, auto-loading data...');
-      await fetchMolitData(regionStr);
+    // Get mock data directly (bypass DB issues)
+    const data = await fetchMolitData(regionStr);
+
+    // Filter by region if specified
+    let filteredData = data;
+    if (region && regionStr !== '서울') {
+      filteredData = data.filter(d => d.location.includes(regionStr));
     }
 
-    // Return data from DB
-    const data = await getLatestEstates(parseInt(limit as string) || 100, regionStr);
-    res.json({ success: true, data });
+    // Limit results
+    const limitNum = parseInt(limit as string) || 100;
+    res.json({ success: true, data: filteredData.slice(0, limitNum) });
   } catch (error) {
     console.error('Error fetching estates:', error);
     res.status(500).json({
@@ -91,11 +93,38 @@ app.get('/api/stats', async (req, res) => {
     const { region } = req.query;
     const regionStr = region as string || '서울';
 
-    // Fetch from MOLIT API and save to DB
-    await fetchMolitData(regionStr);
+    // Get mock data directly
+    const data = await fetchMolitData(regionStr);
 
-    // Get stats from DB
-    const stats = await getStatistics(regionStr);
+    // Filter by region
+    let filteredData = data;
+    if (region && regionStr !== '서울') {
+      filteredData = data.filter(d => d.location.includes(regionStr));
+    }
+
+    if (filteredData.length === 0) {
+      return res.json({
+        success: true,
+        stats: { totalDeals: 0, avgPrice: 0, minPrice: 0, maxPrice: 0, avgArea: 0, maxArea: 0, minArea: 0, pricePerArea: 0, locations: 0 },
+      });
+    }
+
+    const prices = filteredData.map(d => d.price);
+    const areas = filteredData.map(d => d.area);
+    const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    const avgArea = Math.round((areas.reduce((a, b) => a + b, 0) / areas.length) * 100) / 100;
+
+    const stats = {
+      totalDeals: filteredData.length,
+      avgPrice,
+      minPrice: Math.min(...prices),
+      maxPrice: Math.max(...prices),
+      avgArea,
+      minArea: Math.min(...areas),
+      maxArea: Math.max(...areas),
+      pricePerArea: Math.round((avgPrice * 10000 / avgArea) * 100) / 100,
+      locations: new Set(filteredData.map(d => d.location)).size,
+    };
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error fetching stats:', error);
