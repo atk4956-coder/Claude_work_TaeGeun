@@ -72,9 +72,17 @@ app.get('/api/estates', async (req, res) => {
     const allData = await fetchMolitData(regionStr);
     console.log(`[API] Fetched ${allData.length} records for region: "${regionStr}"`);
 
+    // Filter by location if region is a specific district (서울 구)
+    let filteredData = allData;
+    const seoulGus = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'];
+    if (seoulGus.includes(regionStr)) {
+      filteredData = allData.filter(d => d.location.includes(regionStr));
+      console.log(`[API] Filtered by Seoul district: ${filteredData.length} records`);
+    }
+
     // Limit results
     const limitNum = Math.max(1, parseInt(limit as string) || 100);
-    const result = allData.slice(0, limitNum);
+    const result = filteredData.slice(0, limitNum);
 
     console.log(`[API] Returning ${result.length} records`);
     res.json({ success: true, data: result });
@@ -98,7 +106,15 @@ app.get('/api/stats', async (req, res) => {
     const allData = await fetchMolitData(regionStr);
     console.log(`[API] Fetched ${allData.length} records for region: "${regionStr}"`);
 
-    if (allData.length === 0) {
+    // Filter by location if region is a specific district (서울 구)
+    let filteredData = allData;
+    const seoulGus = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'];
+    if (seoulGus.includes(regionStr)) {
+      filteredData = allData.filter(d => d.location.includes(regionStr));
+      console.log(`[API] Filtered by Seoul district: ${filteredData.length} records`);
+    }
+
+    if (filteredData.length === 0) {
       console.log('[API] No data, returning zeros');
       return res.json({
         success: true,
@@ -107,22 +123,22 @@ app.get('/api/stats', async (req, res) => {
     }
 
     // Calculate stats
-    const prices = allData.map(d => d.price);
-    const areas = allData.map(d => d.area);
+    const prices = filteredData.map(d => d.price);
+    const areas = filteredData.map(d => d.area);
     const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
     const avgArea = Math.round((areas.reduce((a, b) => a + b, 0) / areas.length) * 100) / 100;
-    const totalPrice = avgPrice * allData.length;
+    const totalPrice = avgPrice * filteredData.length;
 
     const stats = {
-      totalDeals: allData.length,
+      totalDeals: filteredData.length,
       avgPrice,
       minPrice: Math.min(...prices),
       maxPrice: Math.max(...prices),
       avgArea,
       minArea: Math.min(...areas),
       maxArea: Math.max(...areas),
-      pricePerArea: avgArea > 0 ? Math.round((totalPrice / (avgArea * allData.length)) * 100) / 100 : 0,
-      locations: new Set(allData.map(d => d.location)).size,
+      pricePerArea: avgArea > 0 ? Math.round((totalPrice / (avgArea * filteredData.length)) * 100) / 100 : 0,
+      locations: new Set(filteredData.map(d => d.location)).size,
     };
 
     console.log(`[API] Stats calculated:`, stats);
