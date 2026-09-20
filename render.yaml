@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: real-estate-api
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BACKEND_PORT
+        value: 3001
+      - key: MOLIT_SERVICE_KEY
+        sync: false
