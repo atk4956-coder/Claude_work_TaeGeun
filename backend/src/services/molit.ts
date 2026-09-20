@@ -1,18 +1,13 @@
 import axios from 'axios';
 import { parseStringPromise } from 'xml2js';
 import { config } from '../config/env.js';
+import { saveEstateRecords, EstateRecord } from './database.js';
 
-interface EstateData {
-  date: string;
-  price: number;
-  area: number;
-  location: string;
-}
+type EstateData = EstateRecord;
 
 // 지역코드 매핑 (국토교통부 표준)
 const REGION_CODES: Record<string, string> = {
-  // 서울 (25개 구)
-  '서울': '11110', // 기본값: 강남구
+  '서울': '11110',
   '강남구': '11110',
   '강동구': '11125',
   '강북구': '11130',
@@ -38,22 +33,15 @@ const REGION_CODES: Record<string, string> = {
   '종로구': '11380',
   '중구': '11410',
   '중랑구': '11420',
-
-  // 기타 지역
   '부산': '26110',
   '인천': '28110',
 };
 
-export async function fetchMolitData(
-  region: string = '서울',
-  dealType: string = 'apts',
-  pageNo: number = 1
-): Promise<EstateData[]> {
+export async function fetchMolitData(region: string = '서울'): Promise<EstateData[]> {
   try {
     const lawdCd = REGION_CODES[region] || '11110';
     const serviceKey = config.MOLIT_SERVICE_KEY;
 
-    // MOLIT API 호출 (최근 3개월 데이터)
     const promises = [];
     const now = new Date();
 
@@ -96,60 +84,64 @@ export async function fetchMolitData(
         if (dealAmount && dateStr) {
           allData.push({
             date: formatDate(dateStr),
-            price: Math.round(dealAmount / 10000), // 만원 단위
+            price: Math.round(dealAmount / 10000),
             area,
             location: address,
+            region,
+            dealType: 'apts',
           });
         }
       }
     }
 
-    // 날짜순 정렬 (최신순)
     allData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    return allData.length > 0 ? allData : getMockData();
+    if (allData.length > 0) {
+      const saved = saveEstateRecords(allData);
+      console.log(`[MOLIT API] Saved ${saved} records to database`);
+      return allData;
+    } else {
+      const mockData = getMockData(region);
+      saveEstateRecords(mockData);
+      return mockData;
+    }
   } catch (error) {
     console.error('[MOLIT API] Fatal error:', error);
-    return getMockData();
+    const mockData = getMockData(region);
+    saveEstateRecords(mockData);
+    return mockData;
   }
 }
 
 function formatDate(dateStr: string): string {
-  // 20240115 → 2024-01-15
   const year = dateStr.substring(0, 4);
   const month = dateStr.substring(4, 6);
   const day = dateStr.substring(6, 8);
   return `${year}-${month}-${day}`;
 }
 
-function getMockData(): EstateData[] {
-  // 최근 3개월 데이터 (2024-11 ~ 2024-01 역순)
+function getMockData(region: string = '서울'): EstateData[] {
   const data: EstateData[] = [
-    // 2024년 1월
-    { date: '2024-01-28', price: 850000, area: 84.95, location: '서울시 강남구' },
-    { date: '2024-01-25', price: 820000, area: 59.80, location: '서울시 서초구' },
-    { date: '2024-01-22', price: 780000, area: 84.95, location: '서울시 강남구' },
-    { date: '2024-01-18', price: 810000, area: 101.50, location: '서울시 서초구' },
-    { date: '2024-01-15', price: 800000, area: 84.95, location: '서울시 강남구' },
-    { date: '2024-01-10', price: 750000, area: 59.80, location: '서울시 서초구' },
-    { date: '2024-01-08', price: 790000, area: 84.95, location: '서울시 강남구' },
-    { date: '2024-01-05', price: 820000, area: 101.50, location: '서울시 서초구' },
-
-    // 2023년 12월
-    { date: '2023-12-28', price: 820000, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-12-25', price: 800000, area: 59.80, location: '서울시 서초구' },
-    { date: '2023-12-20', price: 785000, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-12-15', price: 810000, area: 101.50, location: '서울시 서초구' },
-    { date: '2023-12-10', price: 780000, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-12-05', price: 795000, area: 59.80, location: '서울시 서초구' },
-
-    // 2023년 11월
-    { date: '2023-11-28', price: 800000, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-11-25', price: 810000, area: 59.80, location: '서울시 서초구' },
-    { date: '2023-11-20', price: 795000, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-11-15', price: 825000, area: 101.50, location: '서울시 서초구' },
-    { date: '2023-11-10', price: 805000, area: 84.95, location: '서울시 강남구' },
-    { date: '2023-11-05', price: 790000, area: 59.80, location: '서울시 서초구' },
+    { date: '2024-01-28', price: 850000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2024-01-25', price: 820000, area: 59.80, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2024-01-22', price: 780000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2024-01-18', price: 810000, area: 101.50, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2024-01-15', price: 800000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2024-01-10', price: 750000, area: 59.80, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2024-01-08', price: 790000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2024-01-05', price: 820000, area: 101.50, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2023-12-28', price: 820000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2023-12-25', price: 800000, area: 59.80, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2023-12-20', price: 785000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2023-12-15', price: 810000, area: 101.50, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2023-12-10', price: 780000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2023-12-05', price: 795000, area: 59.80, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2023-11-28', price: 800000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2023-11-25', price: 810000, area: 59.80, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2023-11-20', price: 795000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2023-11-15', price: 825000, area: 101.50, location: '서울시 서초구', region, dealType: 'apts' },
+    { date: '2023-11-10', price: 805000, area: 84.95, location: '서울시 강남구', region, dealType: 'apts' },
+    { date: '2023-11-05', price: 790000, area: 59.80, location: '서울시 서초구', region, dealType: 'apts' },
   ];
 
   return data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());

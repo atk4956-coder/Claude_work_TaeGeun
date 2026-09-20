@@ -5,11 +5,15 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from './config/env.js';
 import { fetchMolitData } from './services/molit.js';
+import { initializeDatabase, getLatestEstates, getStatistics } from './services/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
+
+// Initialize database
+initializeDatabase();
 
 // Middleware
 app.use(cors({
@@ -49,12 +53,14 @@ app.get('/api/health', (_, res) => {
 
 app.get('/api/estates', async (req, res) => {
   try {
-    const { region, dealType, pageNo } = req.query;
-    const data = await fetchMolitData(
-      region as string,
-      dealType as string,
-      parseInt(pageNo as string) || 1
-    );
+    const { region, limit } = req.query;
+    const regionStr = region as string || '서울';
+
+    // Fetch from MOLIT API and save to DB
+    await fetchMolitData(regionStr);
+
+    // Return data from DB
+    const data = getLatestEstates(parseInt(limit as string) || 100, regionStr);
     res.json({ success: true, data });
   } catch (error) {
     console.error('Error fetching estates:', error);
@@ -68,27 +74,13 @@ app.get('/api/estates', async (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const { region } = req.query;
-    const data = await fetchMolitData(region as string, 'apts', 1);
+    const regionStr = region as string || '서울';
 
-    if (data.length === 0) {
-      return res.json({ success: true, stats: null });
-    }
+    // Fetch from MOLIT API and save to DB
+    await fetchMolitData(regionStr);
 
-    const prices = data.map(d => d.price);
-    const areas = data.map(d => d.area);
-
-    const stats = {
-      totalDeals: data.length,
-      avgPrice: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
-      maxPrice: Math.max(...prices),
-      minPrice: Math.min(...prices),
-      avgArea: Math.round(areas.reduce((a, b) => a + b, 0) / areas.length * 100) / 100,
-      maxArea: Math.max(...areas),
-      minArea: Math.min(...areas),
-      pricePerArea: Math.round((prices.reduce((a, b) => a + b, 0) / areas.reduce((a, b) => a + b, 0)) * 100) / 100,
-      locations: [...new Set(data.map(d => d.location))].length,
-    };
-
+    // Get stats from DB
+    const stats = getStatistics(regionStr);
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error fetching stats:', error);
