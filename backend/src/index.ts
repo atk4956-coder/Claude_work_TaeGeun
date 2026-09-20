@@ -65,22 +65,29 @@ app.get('/api/health', (_, res) => {
 app.get('/api/estates', async (req, res) => {
   try {
     const { region, limit } = req.query;
-    const regionStr = region as string || '서울';
+    const regionStr = (region as string || '').trim();
 
-    // Get mock data directly (bypass DB issues)
-    const data = await fetchMolitData(regionStr);
+    console.log(`[API] /api/estates called with region: "${regionStr}"`);
 
-    // Filter by region if specified
-    let filteredData = data;
-    if (region && regionStr !== '서울') {
-      filteredData = data.filter(d => d.location.includes(regionStr));
+    // Get all mock data
+    const allData = await fetchMolitData('서울');
+    console.log(`[API] Total data: ${allData.length} records`);
+
+    // Filter by region if specified (and not '서울')
+    let filteredData = allData;
+    if (regionStr && regionStr !== '서울') {
+      filteredData = allData.filter(d => d.location.includes(regionStr));
+      console.log(`[API] Filtered to "${regionStr}": ${filteredData.length} records`);
     }
 
     // Limit results
-    const limitNum = parseInt(limit as string) || 100;
-    res.json({ success: true, data: filteredData.slice(0, limitNum) });
+    const limitNum = Math.max(1, parseInt(limit as string) || 100);
+    const result = filteredData.slice(0, limitNum);
+
+    console.log(`[API] Returning ${result.length} records`);
+    res.json({ success: true, data: result });
   } catch (error) {
-    console.error('Error fetching estates:', error);
+    console.error('[API] /api/estates error:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -91,28 +98,35 @@ app.get('/api/estates', async (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const { region } = req.query;
-    const regionStr = region as string || '서울';
+    const regionStr = (region as string || '').trim();
 
-    // Get mock data directly
-    const data = await fetchMolitData(regionStr);
+    console.log(`[API] /api/stats called with region: "${regionStr}"`);
 
-    // Filter by region
-    let filteredData = data;
-    if (region && regionStr !== '서울') {
-      filteredData = data.filter(d => d.location.includes(regionStr));
+    // Get all mock data
+    const allData = await fetchMolitData('서울');
+    console.log(`[API] Total data: ${allData.length} records`);
+
+    // Filter by region if specified (and not '서울')
+    let filteredData = allData;
+    if (regionStr && regionStr !== '서울') {
+      filteredData = allData.filter(d => d.location.includes(regionStr));
+      console.log(`[API] Filtered to "${regionStr}": ${filteredData.length} records`);
     }
 
     if (filteredData.length === 0) {
+      console.log('[API] No data, returning zeros');
       return res.json({
         success: true,
         stats: { totalDeals: 0, avgPrice: 0, minPrice: 0, maxPrice: 0, avgArea: 0, maxArea: 0, minArea: 0, pricePerArea: 0, locations: 0 },
       });
     }
 
+    // Calculate stats
     const prices = filteredData.map(d => d.price);
     const areas = filteredData.map(d => d.area);
     const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
     const avgArea = Math.round((areas.reduce((a, b) => a + b, 0) / areas.length) * 100) / 100;
+    const totalPrice = avgPrice * filteredData.length;
 
     const stats = {
       totalDeals: filteredData.length,
@@ -122,12 +136,14 @@ app.get('/api/stats', async (req, res) => {
       avgArea,
       minArea: Math.min(...areas),
       maxArea: Math.max(...areas),
-      pricePerArea: Math.round((avgPrice * 10000 / avgArea) * 100) / 100,
+      pricePerArea: avgArea > 0 ? Math.round((totalPrice / (avgArea * filteredData.length)) * 100) / 100 : 0,
       locations: new Set(filteredData.map(d => d.location)).size,
     };
+
+    console.log(`[API] Stats calculated:`, stats);
     res.json({ success: true, stats });
   } catch (error) {
-    console.error('Error fetching stats:', error);
+    console.error('[API] /api/stats error:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -142,7 +158,6 @@ app.get('/api/reset', async (_req, res) => {
 
     // Clear all estates
     await clearDatabase();
-    console.log('[Reset] Database cleared');
 
     // Reload mock data
     const data = await fetchMolitData('서울');
@@ -165,15 +180,12 @@ app.get('/api/reset', async (_req, res) => {
 });
 
 // Sync data from MOLIT API
-app.get('/api/sync', async (req, res) => {
+app.get('/api/sync', async (_req, res) => {
   try {
-    const { region } = req.query;
-    const regionStr = region as string || '서울';
-
-    console.log(`[Sync] Starting data sync for region: ${regionStr}`);
+    console.log('[Sync] Starting data sync...');
 
     // Fetch from MOLIT API
-    const data = await fetchMolitData(regionStr);
+    const data = await fetchMolitData('서울');
 
     console.log(`[Sync] Fetched ${data.length} records`);
 
@@ -187,7 +199,6 @@ app.get('/api/sync', async (req, res) => {
       message: `Data sync completed`,
       fetched: data.length,
       saved: saved,
-      region: regionStr,
     });
   } catch (error) {
     console.error('[Sync] Error:', error);
