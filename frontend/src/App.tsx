@@ -192,7 +192,11 @@ function App() {
         <section className="info">
           <h2>데이터</h2>
           <p>총 {estates.length}건의 거래 데이터 (최근 3개월)</p>
-          <p>Phase 2 진행 중: 실제 MOLIT API 연동 테스트 중...</p>
+          {estates.length > 0 ? (
+            <p>✅ 데이터 로드 완료 (PostgreSQL + MOLIT API)</p>
+          ) : (
+            <p>📊 데이터 로드 중...</p>
+          )}
         </section>
       </main>
     </div>
