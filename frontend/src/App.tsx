@@ -41,10 +41,11 @@ function App() {
   useEffect(() => {
     async function fetchData() {
       try {
+        const encodedRegion = encodeURIComponent(region)
         const [healthRes, estatesRes, statsRes] = await Promise.all([
           fetch(`${API_URL}/api/health`),
-          fetch(`${API_URL}/api/estates?region=${region}`),
-          fetch(`${API_URL}/api/stats?region=${region}`),
+          fetch(`${API_URL}/api/estates?region=${encodedRegion}`),
+          fetch(`${API_URL}/api/stats?region=${encodedRegion}`),
         ])
 
         if (!healthRes.ok || !estatesRes.ok || !statsRes.ok) {
