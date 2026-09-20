@@ -26,9 +26,7 @@ interface Stats {
   locations: number
 }
 
-const API_URL = import.meta.env.MODE === 'production'
-  ? 'https://claudeworktaegeun-production.up.railway.app'
-  : 'http://localhost:3001'
+const API_URL = 'http://localhost:3001'
 
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
@@ -41,12 +39,19 @@ function App() {
   useEffect(() => {
     async function fetchData() {
       try {
+        setLoading(true)
+        setError(null)
+
         const encodedRegion = encodeURIComponent(region)
+        console.log(`[FE] Fetching data for region: ${region} (encoded: ${encodedRegion})`)
+
         const [healthRes, estatesRes, statsRes] = await Promise.all([
           fetch(`${API_URL}/api/health`),
           fetch(`${API_URL}/api/estates?region=${encodedRegion}`),
           fetch(`${API_URL}/api/stats?region=${encodedRegion}`),
         ])
+
+        console.log(`[FE] Responses: health=${healthRes.ok}, estates=${estatesRes.ok}, stats=${statsRes.ok}`)
 
         if (!healthRes.ok || !estatesRes.ok || !statsRes.ok) {
           throw new Error('API call failed')
@@ -56,11 +61,15 @@ function App() {
         const estatesData = await estatesRes.json()
         const statsData = await statsRes.json()
 
+        console.log(`[FE] Data loaded: ${estatesData.data?.length || 0} estates, stats=`, statsData.stats)
+
         setHealth(healthData)
         setEstates(estatesData.data || [])
         setStats(statsData.stats)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error')
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error'
+        console.error('[FE] Error:', errorMsg)
+        setError(errorMsg)
       } finally {
         setLoading(false)
       }
