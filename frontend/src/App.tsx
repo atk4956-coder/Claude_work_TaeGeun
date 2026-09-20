@@ -117,9 +117,17 @@ function App() {
               <option value="중구">중구</option>
               <option value="중랑구">중랑구</option>
             </optgroup>
-            <optgroup label="기타">
-              <option value="부산">부산</option>
-              <option value="인천">인천</option>
+            <optgroup label="경기도 (주요 시)">
+              <option value="경기도">경기도 전체</option>
+              <option value="성남시">성남시</option>
+              <option value="수원시">수원시</option>
+              <option value="고양시">고양시</option>
+              <option value="용인시">용인시</option>
+              <option value="안산시">안산시</option>
+              <option value="안양시">안양시</option>
+              <option value="부천시">부천시</option>
+              <option value="평택시">평택시</option>
+              <option value="화성시">화성시</option>
             </optgroup>
           </select>
         </section>
