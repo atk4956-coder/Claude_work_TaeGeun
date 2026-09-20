@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from './config/env.js';
 import { fetchMolitData } from './services/molit.js';
-import { initializeDatabase, getLatestEstates, getStatistics, saveEstateRecords } from './services/database.js';
+import { initializeDatabase, getLatestEstates, getStatistics, saveEstateRecords, clearDatabase } from './services/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -95,6 +95,35 @@ app.get('/api/stats', async (req, res) => {
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error fetching stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// Reset and reload data
+app.get('/api/reset', async (_req, res) => {
+  try {
+    console.log('[Reset] Clearing database and reloading data...');
+
+    // Clear all estates
+    await clearDatabase();
+    console.log('[Reset] Database cleared');
+
+    // Reload mock data
+    const data = await fetchMolitData('서울');
+    const saved = await saveEstateRecords(data);
+
+    console.log(`[Reset] Reloaded ${saved} records`);
+
+    res.json({
+      success: true,
+      message: 'Database reset and reloaded',
+      recordsLoaded: saved,
+    });
+  } catch (error) {
+    console.error('[Reset] Error:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

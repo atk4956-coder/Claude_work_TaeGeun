@@ -193,6 +193,19 @@ export async function getStatistics(region?: string): Promise<any> {
   }
 }
 
+export async function clearDatabase(): Promise<void> {
+  try {
+    const client = getPool();
+    if (client) {
+      await client.query('DELETE FROM estates');
+      console.log('[DB] All records deleted');
+    }
+  } catch (err) {
+    console.error('[DB] Error clearing database:', err);
+    throw err;
+  }
+}
+
 export async function closeDatabase() {
   if (pool) {
     await pool.end();
