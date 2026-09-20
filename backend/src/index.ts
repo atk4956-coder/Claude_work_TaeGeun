@@ -15,6 +15,17 @@ const app = express();
 // Initialize database
 initializeDatabase();
 
+// Auto-load initial data on startup
+(async () => {
+  try {
+    console.log('[Init] Loading initial data...');
+    await fetchMolitData('서울');
+    console.log('[Init] Initial data loaded');
+  } catch (err) {
+    console.error('[Init] Error loading initial data:', err);
+  }
+})();
+
 // Middleware
 app.use(cors({
   origin: '*',
