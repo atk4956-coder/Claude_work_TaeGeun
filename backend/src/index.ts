@@ -72,6 +72,42 @@ app.get('/api/health', (_, res) => {
   });
 });
 
+// 네트워크 진단 엔드포인트
+app.get('/api/network-test', async (_, res) => {
+  const results: any = {};
+
+  try {
+    // 1. MOLIT API 도메인 해석 테스트
+    const dns = require('dns');
+    dns.resolve('openapi.molit.go.kr', (err, addresses) => {
+      results.dns = err ? `Error: ${err.message}` : `Resolved: ${addresses.join(', ')}`;
+    });
+
+    // 2. HTTP 요청 테스트 (3초 타임아웃)
+    const testUrl = 'https://openapi.molit.go.kr/';
+    const axios = require('axios');
+
+    try {
+      const response = await axios.get(testUrl, { timeout: 3000 });
+      results.http = `Status: ${response.status}`;
+    } catch (err: any) {
+      results.http = `Error: ${err.code || err.message}`;
+    }
+
+    // 3. 환경 변수 확인
+    results.molit_key_set = !!config.MOLIT_SERVICE_KEY;
+    results.molit_key_length = config.MOLIT_SERVICE_KEY?.length || 0;
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      results
+    });
+  } catch (err: any) {
+    res.json({ error: err.message });
+  }
+});
+
 app.get('/api/estates', async (req, res) => {
   try {
     const { region, limit } = req.query;
