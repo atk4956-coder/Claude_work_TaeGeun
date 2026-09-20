@@ -134,11 +134,15 @@ export async function getStatistics(region?: string): Promise<any> {
     const client = getPool();
     if (!client) {
       return {
-        totalCount: 0,
+        totalDeals: 0,
         avgPrice: 0,
         minPrice: 0,
         maxPrice: 0,
         avgArea: 0,
+        maxArea: 0,
+        minArea: 0,
+        pricePerArea: 0,
+        locations: 0,
       };
     }
 
@@ -147,7 +151,10 @@ export async function getStatistics(region?: string): Promise<any> {
                    ROUND(AVG(price)) as avgPrice,
                    MIN(price) as minPrice,
                    MAX(price) as maxPrice,
-                   ROUND(AVG(area)::numeric, 2) as avgArea
+                   ROUND(AVG(area)::numeric, 2) as avgArea,
+                   MAX(area) as maxArea,
+                   MIN(area) as minArea,
+                   COUNT(DISTINCT location) as locations
                  FROM estates`;
     const params: any[] = [];
 
@@ -159,12 +166,20 @@ export async function getStatistics(region?: string): Promise<any> {
     const result = await client.query(query, params);
     const row = result.rows[0];
 
+    const totalDeals = parseInt(row.totalcount) || 0;
+    const totalPrice = (parseInt(row.avgprice) || 0) * totalDeals;
+    const pricePerArea = totalDeals > 0 ? Math.round((totalPrice / (parseFloat(row.avgarea) || 1)) * 100) / 100 : 0;
+
     return {
-      totalCount: parseInt(row.totalcount) || 0,
+      totalDeals,
       avgPrice: parseInt(row.avgprice) || 0,
       minPrice: parseInt(row.minprice) || 0,
       maxPrice: parseInt(row.maxprice) || 0,
       avgArea: parseFloat(row.avgarea) || 0,
+      maxArea: parseFloat(row.maxarea) || 0,
+      minArea: parseFloat(row.minarea) || 0,
+      pricePerArea,
+      locations: parseInt(row.locations) || 0,
     };
   } catch (err) {
     console.error('[DB] Error in getStatistics:', err);
