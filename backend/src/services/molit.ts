@@ -76,7 +76,13 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
       };
 
       promises.push(
-        axios.get(url, { params }).catch(err => {
+        axios.get(url, {
+          params,
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          }
+        }).catch(err => {
           console.error(`[MOLIT API Error] DEAL_YMD=${dealYmd}:`, err.message);
           return null;
         })
