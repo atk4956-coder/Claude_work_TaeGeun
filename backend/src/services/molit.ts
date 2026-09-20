@@ -92,11 +92,22 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
     const responses = await Promise.all(promises);
     const allData: EstateData[] = [];
 
+    console.log(`[MOLIT DEBUG] Total responses: ${responses.length}`);
+    let successCount = 0;
+
     for (const response of responses) {
-      if (!response || !response.data) continue;
+      if (!response || !response.data) {
+        console.log(`[MOLIT DEBUG] Skipped null response`);
+        continue;
+      }
+
+      successCount++;
+      console.log(`[MOLIT DEBUG] Response ${successCount}: data size=${response.data.length}, status=${response.status}`);
 
       const parsed = await parseStringPromise(response.data);
       const items = parsed?.response?.body?.[0]?.items?.[0]?.item || [];
+
+      console.log(`[MOLIT DEBUG] Parsed items: ${Array.isArray(items) ? items.length : 'not array'}`);
 
       for (const item of items) {
         const dealAmount = parseInt(item.거래금액?.[0] || '0');
