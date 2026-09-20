@@ -1,25 +1,24 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { config } from './config/env.js';
 import { fetchMolitData } from './services/molit.js';
-import { initializeDatabase, getLatestEstates, getStatistics, saveEstateRecords, clearDatabase } from './services/database.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { initializeDatabase, saveEstateRecords, clearDatabase } from './services/database.js';
 
 const app = express();
 
 // Initialize database
 initializeDatabase();
 
-// Auto-load initial data on startup
+// Auto-load initial data on startup (Seoul + Gyeonggi)
 (async () => {
   try {
-    console.log('[Init] Loading initial data...');
-    await fetchMolitData('서울');
+    console.log('[Init] Loading initial data for Seoul and Gyeonggi...');
+    await Promise.all([
+      fetchMolitData('서울'),
+      fetchMolitData('경기도'),
+    ]);
     console.log('[Init] Initial data loaded');
   } catch (err) {
     console.error('[Init] Error loading initial data:', err);
@@ -65,24 +64,17 @@ app.get('/api/health', (_, res) => {
 app.get('/api/estates', async (req, res) => {
   try {
     const { region, limit } = req.query;
-    const regionStr = (region as string || '').trim();
+    const regionStr = (region as string || '서울').trim();
 
     console.log(`[API] /api/estates called with region: "${regionStr}"`);
 
-    // Get all mock data
-    const allData = await fetchMolitData('서울');
-    console.log(`[API] Total data: ${allData.length} records`);
-
-    // Filter by region if specified (and not '서울')
-    let filteredData = allData;
-    if (regionStr && regionStr !== '서울') {
-      filteredData = allData.filter(d => d.location.includes(regionStr));
-      console.log(`[API] Filtered to "${regionStr}": ${filteredData.length} records`);
-    }
+    // Fetch data from specified region
+    const allData = await fetchMolitData(regionStr);
+    console.log(`[API] Fetched ${allData.length} records for region: "${regionStr}"`);
 
     // Limit results
     const limitNum = Math.max(1, parseInt(limit as string) || 100);
-    const result = filteredData.slice(0, limitNum);
+    const result = allData.slice(0, limitNum);
 
     console.log(`[API] Returning ${result.length} records`);
     res.json({ success: true, data: result });
@@ -98,22 +90,15 @@ app.get('/api/estates', async (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const { region } = req.query;
-    const regionStr = (region as string || '').trim();
+    const regionStr = (region as string || '서울').trim();
 
     console.log(`[API] /api/stats called with region: "${regionStr}"`);
 
-    // Get all mock data
-    const allData = await fetchMolitData('서울');
-    console.log(`[API] Total data: ${allData.length} records`);
+    // Fetch data from specified region
+    const allData = await fetchMolitData(regionStr);
+    console.log(`[API] Fetched ${allData.length} records for region: "${regionStr}"`);
 
-    // Filter by region if specified (and not '서울')
-    let filteredData = allData;
-    if (regionStr && regionStr !== '서울') {
-      filteredData = allData.filter(d => d.location.includes(regionStr));
-      console.log(`[API] Filtered to "${regionStr}": ${filteredData.length} records`);
-    }
-
-    if (filteredData.length === 0) {
+    if (allData.length === 0) {
       console.log('[API] No data, returning zeros');
       return res.json({
         success: true,
@@ -122,22 +107,22 @@ app.get('/api/stats', async (req, res) => {
     }
 
     // Calculate stats
-    const prices = filteredData.map(d => d.price);
-    const areas = filteredData.map(d => d.area);
+    const prices = allData.map(d => d.price);
+    const areas = allData.map(d => d.area);
     const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
     const avgArea = Math.round((areas.reduce((a, b) => a + b, 0) / areas.length) * 100) / 100;
-    const totalPrice = avgPrice * filteredData.length;
+    const totalPrice = avgPrice * allData.length;
 
     const stats = {
-      totalDeals: filteredData.length,
+      totalDeals: allData.length,
       avgPrice,
       minPrice: Math.min(...prices),
       maxPrice: Math.max(...prices),
       avgArea,
       minArea: Math.min(...areas),
       maxArea: Math.max(...areas),
-      pricePerArea: avgArea > 0 ? Math.round((totalPrice / (avgArea * filteredData.length)) * 100) / 100 : 0,
-      locations: new Set(filteredData.map(d => d.location)).size,
+      pricePerArea: avgArea > 0 ? Math.round((totalPrice / (avgArea * allData.length)) * 100) / 100 : 0,
+      locations: new Set(allData.map(d => d.location)).size,
     };
 
     console.log(`[API] Stats calculated:`, stats);
@@ -159,11 +144,16 @@ app.get('/api/reset', async (_req, res) => {
     // Clear all estates
     await clearDatabase();
 
-    // Reload mock data
-    const data = await fetchMolitData('서울');
-    const saved = await saveEstateRecords(data);
+    // Reload data for Seoul and Gyeonggi
+    const [seoulData, gyeonggiData] = await Promise.all([
+      fetchMolitData('서울'),
+      fetchMolitData('경기도'),
+    ]);
 
-    console.log(`[Reset] Reloaded ${saved} records`);
+    const allData = [...seoulData, ...gyeonggiData];
+    const saved = await saveEstateRecords(allData);
+
+    console.log(`[Reset] Reloaded ${saved} records (Seoul: ${seoulData.length}, Gyeonggi: ${gyeonggiData.length})`);
 
     res.json({
       success: true,
@@ -182,22 +172,26 @@ app.get('/api/reset', async (_req, res) => {
 // Sync data from MOLIT API
 app.get('/api/sync', async (_req, res) => {
   try {
-    console.log('[Sync] Starting data sync...');
+    console.log('[Sync] Starting data sync for Seoul and Gyeonggi...');
 
     // Fetch from MOLIT API
-    const data = await fetchMolitData('서울');
+    const [seoulData, gyeonggiData] = await Promise.all([
+      fetchMolitData('서울'),
+      fetchMolitData('경기도'),
+    ]);
 
-    console.log(`[Sync] Fetched ${data.length} records`);
+    const allData = [...seoulData, ...gyeonggiData];
+    console.log(`[Sync] Fetched ${allData.length} records (Seoul: ${seoulData.length}, Gyeonggi: ${gyeonggiData.length})`);
 
     // Save to DB
-    const saved = await saveEstateRecords(data);
+    const saved = await saveEstateRecords(allData);
 
     console.log(`[Sync] Saved ${saved} records to database`);
 
     res.json({
       success: true,
       message: `Data sync completed`,
-      fetched: data.length,
+      fetched: allData.length,
       saved: saved,
     });
   } catch (error) {
