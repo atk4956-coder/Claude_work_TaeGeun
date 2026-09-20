@@ -1,7 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { config } from '../config/env.js';
-
-const dbPath = config.DATABASE_FILE_PATH;
+import { Pool } from 'pg';
 
 export interface EstateRecord {
   id?: number;
@@ -14,103 +11,176 @@ export interface EstateRecord {
   createdAt?: string;
 }
 
-let db: any;
+let pool: Pool | null = null;
 
-function getDb() {
-  if (!db) {
-    db = new (sqlite3.Database as any)(dbPath);
+function getPool(): Pool {
+  if (!pool) {
+    const databaseUrl = process.env.DATABASE_URL;
+
+    if (!databaseUrl) {
+      console.log('[DB] DATABASE_URL not set - using mock data mode');
+      return null as any;
+    }
+
+    pool = new Pool({
+      connectionString: databaseUrl,
+      ssl: { rejectUnauthorized: false },
+    });
+
+    pool.on('error', (err) => {
+      console.error('[DB] Unexpected error on idle client', err);
+    });
   }
-  return db;
+
+  return pool;
 }
 
-export function initializeDatabase() {
-  const database = getDb();
-  database.serialize(() => {
-    database.run(`
+export async function initializeDatabase() {
+  try {
+    const client = getPool();
+    if (!client) {
+      console.log('[DB] Skipping initialization - no database URL');
+      return;
+    }
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS estates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         date TEXT NOT NULL,
         price INTEGER NOT NULL,
         area REAL NOT NULL,
         location TEXT NOT NULL,
         region TEXT NOT NULL,
         dealType TEXT DEFAULT 'apts',
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(date, price, area, location)
       )
-    `, (err: any) => {
-      if (err) console.error('[DB] Error creating table:', err);
-    });
-  });
-  console.log('[DB] Database initialized');
+    `);
+
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_date ON estates(date)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_region ON estates(region)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_dealType ON estates(dealType)`);
+
+    console.log('[DB] Database initialized successfully');
+  } catch (err) {
+    console.error('[DB] Error initializing database:', err);
+  }
 }
 
 export async function saveEstateRecords(records: EstateRecord[]): Promise<number> {
-  return new Promise((resolve) => {
-    const database = getDb();
+  try {
+    const client = getPool();
+    if (!client) {
+      console.log('[DB] No database connection - skipping save');
+      return 0;
+    }
+
     let count = 0;
+    for (const rec of records) {
+      try {
+        const result = await client.query(
+          `INSERT INTO estates (date, price, area, location, region, dealType)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (date, price, area, location) DO NOTHING`,
+          [rec.date, rec.price, rec.area, rec.location, rec.region, rec.dealType || 'apts']
+        );
+        count += result.rowCount || 0;
+      } catch (err) {
+        console.error('[DB] Error inserting record:', err);
+      }
+    }
 
-    database.serialize(() => {
-      const stmt = database.prepare(`
-        INSERT OR IGNORE INTO estates
-        (date, price, area, location, region, dealType)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-
-      records.forEach((rec: EstateRecord, index: number) => {
-        stmt.run(rec.date, rec.price, rec.area, rec.location, rec.region, rec.dealType || 'apts', function(this: any, err: any) {
-          if (!err && this.changes > 0) count++;
-        });
-      });
-
-      stmt.finalize(() => resolve(count));
-    });
-  });
+    console.log(`[DB] Saved ${count} records`);
+    return count;
+  } catch (err) {
+    console.error('[DB] Error in saveEstateRecords:', err);
+    return 0;
+  }
 }
 
-export async function getLatestEstates(limit: number = 100, region?: string): Promise<EstateRecord[]> {
-  return new Promise((resolve) => {
-    const database = getDb();
-    let query = `SELECT id, date, price, area, location, region, dealType, createdAt FROM estates`;
+export async function getLatestEstates(
+  limit: number = 100,
+  region?: string
+): Promise<EstateRecord[]> {
+  try {
+    const client = getPool();
+    if (!client) {
+      console.log('[DB] No database connection - returning empty');
+      return [];
+    }
+
+    let query = `SELECT id, date, price, area, location, region, dealType, createdAt
+                 FROM estates`;
     const params: any[] = [];
 
     if (region) {
-      query += ` WHERE region = ?`;
+      query += ` WHERE region = $${params.length + 1}`;
       params.push(region);
     }
 
-    query += ` ORDER BY date DESC LIMIT ?`;
+    query += ` ORDER BY date DESC LIMIT $${params.length + 1}`;
     params.push(limit);
 
-    database.all(query, params, (err: any, rows: any[]) => {
-      resolve(err ? [] : (rows || []));
-    });
-  });
+    const result = await client.query(query, params);
+    return result.rows || [];
+  } catch (err) {
+    console.error('[DB] Error in getLatestEstates:', err);
+    return [];
+  }
 }
 
 export async function getStatistics(region?: string): Promise<any> {
-  return new Promise((resolve) => {
-    const database = getDb();
-    let query = `SELECT COUNT(*) as totalCount, AVG(price) as avgPrice, MIN(price) as minPrice, MAX(price) as maxPrice, AVG(area) as avgArea FROM estates`;
+  try {
+    const client = getPool();
+    if (!client) {
+      return {
+        totalCount: 0,
+        avgPrice: 0,
+        minPrice: 0,
+        maxPrice: 0,
+        avgArea: 0,
+      };
+    }
+
+    let query = `SELECT
+                   COUNT(*) as totalCount,
+                   ROUND(AVG(price)) as avgPrice,
+                   MIN(price) as minPrice,
+                   MAX(price) as maxPrice,
+                   ROUND(AVG(area)::numeric, 2) as avgArea
+                 FROM estates`;
     const params: any[] = [];
 
     if (region) {
-      query += ` WHERE region = ?`;
+      query += ` WHERE region = $${params.length + 1}`;
       params.push(region);
     }
 
-    database.get(query, params, (err: any, row: any) => {
-      if (err) {
-        resolve({ totalCount: 0, avgPrice: 0, minPrice: 0, maxPrice: 0, avgArea: 0 });
-      } else {
-        resolve({
-          totalCount: row?.totalCount || 0,
-          avgPrice: Math.round(row?.avgPrice || 0),
-          minPrice: row?.minPrice || 0,
-          maxPrice: row?.maxPrice || 0,
-          avgArea: Math.round((row?.avgArea || 0) * 100) / 100,
-        });
-      }
-    });
-  });
+    const result = await client.query(query, params);
+    const row = result.rows[0];
+
+    return {
+      totalCount: parseInt(row.totalcount) || 0,
+      avgPrice: parseInt(row.avgprice) || 0,
+      minPrice: parseInt(row.minprice) || 0,
+      maxPrice: parseInt(row.maxprice) || 0,
+      avgArea: parseFloat(row.avgarea) || 0,
+    };
+  } catch (err) {
+    console.error('[DB] Error in getStatistics:', err);
+    return {
+      totalCount: 0,
+      avgPrice: 0,
+      minPrice: 0,
+      maxPrice: 0,
+      avgArea: 0,
+    };
+  }
+}
+
+export async function closeDatabase() {
+  if (pool) {
+    await pool.end();
+    console.log('[DB] Database connection closed');
+  }
 }
