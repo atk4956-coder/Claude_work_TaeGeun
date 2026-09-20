@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { join } from 'path';
+import * as dns from 'dns';
+import axios from 'axios';
 import { config } from './config/env.js';
 import { fetchMolitData } from './services/molit.js';
 import { initializeDatabase, saveEstateRecords, clearDatabase } from './services/database.js';
@@ -78,15 +80,15 @@ app.get('/api/network-test', async (_, res) => {
 
   try {
     // 1. MOLIT API 도메인 해석 테스트
-    const dns = require('dns');
-    dns.resolve('openapi.molit.go.kr', (err: any, addresses: any) => {
-      results.dns = err ? `Error: ${err.message}` : `Resolved: ${addresses.join(', ')}`;
+    await new Promise((resolve) => {
+      dns.resolve('openapi.molit.go.kr', (err: any, addresses: any) => {
+        results.dns = err ? `Error: ${err.message}` : `Resolved: ${addresses.join(', ')}`;
+        resolve(null);
+      });
     });
 
     // 2. HTTP 요청 테스트 (3초 타임아웃)
     const testUrl = 'https://openapi.molit.go.kr/';
-    const axios = require('axios');
-
     try {
       const response = await axios.get(testUrl, { timeout: 3000 });
       results.http = `Status: ${response.status}`;
