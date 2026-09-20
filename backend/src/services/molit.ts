@@ -97,18 +97,18 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
     allData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     if (allData.length > 0) {
-      const saved = saveEstateRecords(allData);
+      const saved = await saveEstateRecords(allData);
       console.log(`[MOLIT API] Saved ${saved} records to database`);
       return allData;
     } else {
       const mockData = getMockData(region);
-      saveEstateRecords(mockData);
+      await saveEstateRecords(mockData);
       return mockData;
     }
   } catch (error) {
     console.error('[MOLIT API] Fatal error:', error);
     const mockData = getMockData(region);
-    saveEstateRecords(mockData);
+    await saveEstateRecords(mockData);
     return mockData;
   }
 }

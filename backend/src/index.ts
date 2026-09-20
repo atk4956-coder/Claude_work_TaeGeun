@@ -60,7 +60,7 @@ app.get('/api/estates', async (req, res) => {
     await fetchMolitData(regionStr);
 
     // Return data from DB
-    const data = getLatestEstates(parseInt(limit as string) || 100, regionStr);
+    const data = await getLatestEstates(parseInt(limit as string) || 100, regionStr);
     res.json({ success: true, data });
   } catch (error) {
     console.error('Error fetching estates:', error);
@@ -80,7 +80,7 @@ app.get('/api/stats', async (req, res) => {
     await fetchMolitData(regionStr);
 
     // Get stats from DB
-    const stats = getStatistics(regionStr);
+    const stats = await getStatistics(regionStr);
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error fetching stats:', error);

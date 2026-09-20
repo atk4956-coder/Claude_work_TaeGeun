@@ -1,10 +1,8 @@
-import Database from 'better-sqlite3';
+import sqlite3 from 'sqlite3';
 import { config } from '../config/env.js';
 
 const dbPath = config.DATABASE_FILE_PATH;
-export const db = new Database(dbPath) as any;
 
-// 타입 정의
 export interface EstateRecord {
   id?: number;
   date: string;
@@ -16,154 +14,103 @@ export interface EstateRecord {
   createdAt?: string;
 }
 
-// 테이블 초기화
+let db: any;
+
+function getDb() {
+  if (!db) {
+    db = new (sqlite3.Database as any)(dbPath);
+  }
+  return db;
+}
+
 export function initializeDatabase() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS estates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      date TEXT NOT NULL,
-      price INTEGER NOT NULL,
-      area REAL NOT NULL,
-      location TEXT NOT NULL,
-      region TEXT NOT NULL,
-      dealType TEXT DEFAULT 'apts',
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(date, price, area, location)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_date ON estates(date);
-    CREATE INDEX IF NOT EXISTS idx_region ON estates(region);
-    CREATE INDEX IF NOT EXISTS idx_dealType ON estates(dealType);
-  `);
-
-  console.log('[DB] Database initialized successfully');
-}
-
-// 데이터 저장
-export function saveEstateRecords(records: EstateRecord[]): number {
-  const stmt = db.prepare(`
-    INSERT OR IGNORE INTO estates
-    (date, price, area, location, region, dealType)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  const insertMany = db.transaction((recs: EstateRecord[]) => {
-    let count = 0;
-    for (const rec of recs) {
-      const result = stmt.run(
-        rec.date,
-        rec.price,
-        rec.area,
-        rec.location,
-        rec.region,
-        rec.dealType || 'apts'
-      );
-      if (result.changes > 0) count++;
-    }
-    return count;
+  const database = getDb();
+  database.serialize(() => {
+    database.run(`
+      CREATE TABLE IF NOT EXISTS estates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        area REAL NOT NULL,
+        location TEXT NOT NULL,
+        region TEXT NOT NULL,
+        dealType TEXT DEFAULT 'apts',
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(date, price, area, location)
+      )
+    `, (err: any) => {
+      if (err) console.error('[DB] Error creating table:', err);
+    });
   });
-
-  return insertMany(records);
+  console.log('[DB] Database initialized');
 }
 
-// 최신 데이터 조회
-export function getLatestEstates(limit: number = 100, region?: string): EstateRecord[] {
-  let query = `
-    SELECT id, date, price, area, location, region, dealType, createdAt
-    FROM estates
-  `;
+export async function saveEstateRecords(records: EstateRecord[]): Promise<number> {
+  return new Promise((resolve) => {
+    const database = getDb();
+    let count = 0;
 
-  const params: any[] = [];
+    database.serialize(() => {
+      const stmt = database.prepare(`
+        INSERT OR IGNORE INTO estates
+        (date, price, area, location, region, dealType)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
 
-  if (region) {
-    query += ` WHERE region = ?`;
-    params.push(region);
-  }
+      records.forEach((rec: EstateRecord, index: number) => {
+        stmt.run(rec.date, rec.price, rec.area, rec.location, rec.region, rec.dealType || 'apts', function(this: any, err: any) {
+          if (!err && this.changes > 0) count++;
+        });
+      });
 
-  query += ` ORDER BY date DESC LIMIT ?`;
-  params.push(limit);
-
-  const stmt = db.prepare(query);
-  return stmt.all(...params) as EstateRecord[];
+      stmt.finalize(() => resolve(count));
+    });
+  });
 }
 
-// 날짜 범위로 데이터 조회
-export function getEstatesByDateRange(
-  startDate: string,
-  endDate: string,
-  region?: string
-): EstateRecord[] {
-  let query = `
-    SELECT id, date, price, area, location, region, dealType, createdAt
-    FROM estates
-    WHERE date BETWEEN ? AND ?
-  `;
+export async function getLatestEstates(limit: number = 100, region?: string): Promise<EstateRecord[]> {
+  return new Promise((resolve) => {
+    const database = getDb();
+    let query = `SELECT id, date, price, area, location, region, dealType, createdAt FROM estates`;
+    const params: any[] = [];
 
-  const params: any[] = [startDate, endDate];
+    if (region) {
+      query += ` WHERE region = ?`;
+      params.push(region);
+    }
 
-  if (region) {
-    query += ` AND region = ?`;
-    params.push(region);
-  }
+    query += ` ORDER BY date DESC LIMIT ?`;
+    params.push(limit);
 
-  query += ` ORDER BY date DESC`;
-
-  const stmt = db.prepare(query);
-  return stmt.all(...params) as EstateRecord[];
+    database.all(query, params, (err: any, rows: any[]) => {
+      resolve(err ? [] : (rows || []));
+    });
+  });
 }
 
-// 통계 데이터 조회
-export function getStatistics(region?: string) {
-  let query = `
-    SELECT
-      COUNT(*) as totalCount,
-      AVG(price) as avgPrice,
-      MIN(price) as minPrice,
-      MAX(price) as maxPrice,
-      AVG(area) as avgArea
-    FROM estates
-  `;
+export async function getStatistics(region?: string): Promise<any> {
+  return new Promise((resolve) => {
+    const database = getDb();
+    let query = `SELECT COUNT(*) as totalCount, AVG(price) as avgPrice, MIN(price) as minPrice, MAX(price) as maxPrice, AVG(area) as avgArea FROM estates`;
+    const params: any[] = [];
 
-  const params: any[] = [];
+    if (region) {
+      query += ` WHERE region = ?`;
+      params.push(region);
+    }
 
-  if (region) {
-    query += ` WHERE region = ?`;
-    params.push(region);
-  }
-
-  const stmt = db.prepare(query);
-  const result = stmt.get(...params) as any;
-
-  return {
-    totalCount: result?.totalCount || 0,
-    avgPrice: Math.round(result?.avgPrice || 0),
-    minPrice: result?.minPrice || 0,
-    maxPrice: result?.maxPrice || 0,
-    avgArea: Math.round((result?.avgArea || 0) * 100) / 100,
-  };
-}
-
-// 지역별 데이터 개수
-export function getCountByRegion() {
-  const stmt = db.prepare(`
-    SELECT region, COUNT(*) as count
-    FROM estates
-    GROUP BY region
-    ORDER BY count DESC
-  `);
-  return stmt.all() as { region: string; count: number }[];
-}
-
-// 데이터 정리 (오래된 데이터 삭제, 선택사항)
-export function cleanOldData(daysToKeep: number = 365) {
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-
-  const stmt = db.prepare(`
-    DELETE FROM estates WHERE date < ?
-  `);
-
-  const result = stmt.run(cutoffDate.toISOString().split('T')[0]);
-  console.log(`[DB] Deleted ${result.changes} old records`);
-  return result.changes;
+    database.get(query, params, (err: any, row: any) => {
+      if (err) {
+        resolve({ totalCount: 0, avgPrice: 0, minPrice: 0, maxPrice: 0, avgArea: 0 });
+      } else {
+        resolve({
+          totalCount: row?.totalCount || 0,
+          avgPrice: Math.round(row?.avgPrice || 0),
+          minPrice: row?.minPrice || 0,
+          maxPrice: row?.maxPrice || 0,
+          avgArea: Math.round((row?.avgArea || 0) * 100) / 100,
+        });
+      }
+    });
+  });
 }

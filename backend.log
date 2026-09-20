@@ -1,0 +1,14 @@
+
+> real-estate-analytics@1.0.0 dev:backend
+> npm run dev -w backend
+
+
+> backend@1.0.0 dev
+> node --import tsx ./src/index.ts
+
+[Init] CWD: C:\Users\PC\Desktop\TG\0_Claude\work\TestProject\backend
+[Init] Frontend path: C:\Users\PC\Desktop\TG\0_Claude\work\TestProject\backend\frontend\dist
+[2026-09-20T04:40:47.769Z] Backend server running on http://localhost:3001
+[MOLIT API Error] DEAL_YMD=202608: connect ECONNREFUSED 127.0.0.1:443
+[MOLIT API Error] DEAL_YMD=202609: connect ECONNREFUSED 127.0.0.1:443
+[MOLIT API Error] DEAL_YMD=202607: connect ECONNREFUSED 127.0.0.1:443
