@@ -79,7 +79,7 @@ app.get('/api/network-test', async (_, res) => {
   try {
     // 1. MOLIT API 도메인 해석 테스트
     const dns = require('dns');
-    dns.resolve('openapi.molit.go.kr', (err, addresses) => {
+    dns.resolve('openapi.molit.go.kr', (err: any, addresses: any) => {
       results.dns = err ? `Error: ${err.message}` : `Resolved: ${addresses.join(', ')}`;
     });
 
