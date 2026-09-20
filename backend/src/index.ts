@@ -67,8 +67,12 @@ app.get('/api/estates', async (req, res) => {
     const { region, limit } = req.query;
     const regionStr = region as string || '서울';
 
-    // Fetch from MOLIT API and save to DB
-    await fetchMolitData(regionStr);
+    // Check if DB is empty and auto-load if needed
+    const dbCheck = await getLatestEstates(1, undefined);
+    if (dbCheck.length === 0) {
+      console.log('[API] Database empty, auto-loading data...');
+      await fetchMolitData(regionStr);
+    }
 
     // Return data from DB
     const data = await getLatestEstates(parseInt(limit as string) || 100, regionStr);
