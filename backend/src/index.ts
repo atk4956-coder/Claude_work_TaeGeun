@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from './config/env.js';
 import { fetchMolitData } from './services/molit.js';
-import { initializeDatabase, getLatestEstates, getStatistics } from './services/database.js';
+import { initializeDatabase, getLatestEstates, getStatistics, saveEstateRecords } from './services/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -84,6 +84,40 @@ app.get('/api/stats', async (req, res) => {
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error fetching stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// Sync data from MOLIT API
+app.get('/api/sync', async (req, res) => {
+  try {
+    const { region } = req.query;
+    const regionStr = region as string || '서울';
+
+    console.log(`[Sync] Starting data sync for region: ${regionStr}`);
+
+    // Fetch from MOLIT API
+    const data = await fetchMolitData(regionStr);
+
+    console.log(`[Sync] Fetched ${data.length} records`);
+
+    // Save to DB
+    const saved = await saveEstateRecords(data);
+
+    console.log(`[Sync] Saved ${saved} records to database`);
+
+    res.json({
+      success: true,
+      message: `Data sync completed`,
+      fetched: data.length,
+      saved: saved,
+      region: regionStr,
+    });
+  } catch (error) {
+    console.error('[Sync] Error:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
