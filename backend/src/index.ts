@@ -13,26 +13,17 @@ const app = express();
 // Initialize database
 initializeDatabase();
 
-// Auto-load initial data on startup (Seoul all districts + Gyeonggi)
+// Auto-load initial data on startup (Seoul + Gyeonggi only)
 (async () => {
   try {
-    console.log('[Init] Loading initial data for all Seoul districts and Gyeonggi...');
+    console.log('[Init] Loading initial data for Seoul and Gyeonggi...');
 
-    // 서울 25개 구
-    const seoulDistricts = [
-      '강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구',
-      '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구',
-      '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'
-    ];
+    // 서울과 경기도만 미리 로드 (나머지는 온디맨드)
+    await fetchMolitData('서울');
+    await new Promise(resolve => setTimeout(resolve, 500)); // 500ms 지연
+    await fetchMolitData('경기도');
 
-    // 모든 서울 구 + 경기도 병렬 로드
-    const allPromises = [
-      ...seoulDistricts.map(district => fetchMolitData(district)),
-      fetchMolitData('경기도'),
-    ];
-
-    await Promise.all(allPromises);
-    console.log(`[Init] Initial data loaded: ${seoulDistricts.length} Seoul districts + Gyeonggi`);
+    console.log('[Init] Initial data loaded: Seoul + Gyeonggi');
   } catch (err) {
     console.error('[Init] Error loading initial data:', err);
   }

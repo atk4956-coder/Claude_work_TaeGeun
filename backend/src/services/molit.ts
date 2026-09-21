@@ -59,14 +59,15 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
     const lawdCd = REGION_CODES[region] || '11110';
     const serviceKey = config.MOLIT_SERVICE_KEY;
 
-    const promises = [];
+    const responses = [];
     const now = new Date();
 
+    // 순차 요청 (레이트 제한 피하기 위해)
     for (let i = 0; i < 3; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      const url = 'https://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTrade';
+      const url = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
       const params = {
         serviceKey,
         LAWD_CD: lawdCd,
@@ -75,21 +76,25 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
         numOfRows: 10,
       };
 
-      promises.push(
-        axios.get(url, {
+      try {
+        const response = await axios.get(url, {
           params,
           timeout: 10000,
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           }
-        }).catch(err => {
-          console.error(`[MOLIT API Error] DEAL_YMD=${dealYmd}:`, err.message);
-          return null;
-        })
-      );
-    }
+        });
+        responses.push(response);
+      } catch (err) {
+        console.error(`[MOLIT API Error] DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
+        responses.push(null);
+      }
 
-    const responses = await Promise.all(promises);
+      // 요청 간 지연 (500ms)
+      if (i < 2) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
     const allData: EstateData[] = [];
 
     console.log(`[MOLIT DEBUG] Total responses: ${responses.length}`);
