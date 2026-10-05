@@ -211,7 +211,7 @@ function App() {
 
         <section className="info">
           <h2>데이터</h2>
-          <p>총 {estates.length}건의 거래 데이터 (최근 3개월)</p>
+          <p>총 {estates.length}건의 거래 데이터 (최근 12개월)</p>
           {estates.length > 0 ? (
             <p>✅ 데이터 로드 완료 (PostgreSQL + MOLIT API)</p>
           ) : (
