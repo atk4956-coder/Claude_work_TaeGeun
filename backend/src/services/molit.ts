@@ -78,37 +78,44 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
       const responses = [];
       let debugPrinted = false;
 
-      // 순차 요청 (레이트 제한 피하기 위해 500ms 지연)
-      for (let i = 0; i < 12; i++) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
+      // 병렬 요청 (2개씩 동시)
+      for (let i = 0; i < 12; i += 2) {
+        const requests = [];
 
-        const url = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
-        const params = {
-          serviceKey,
-          LAWD_CD: lawdCd,
-          DEAL_YMD: dealYmd,
-          pageNo: 1,
-          numOfRows: 10,
-        };
+        // 2개 요청 준비
+        for (let j = i; j < Math.min(i + 2, 12); j++) {
+          const date = new Date(now.getFullYear(), now.getMonth() - j, 1);
+          const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-        try {
-          const response = await axios.get(url, {
-            params,
-            timeout: 10000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            }
-          });
-          responses.push(response);
-        } catch (err) {
-          console.error(`[MOLIT API Error] LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
-          responses.push(null);
+          const url = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
+          const params = {
+            serviceKey,
+            LAWD_CD: lawdCd,
+            DEAL_YMD: dealYmd,
+            pageNo: 1,
+            numOfRows: 10,
+          };
+
+          requests.push(
+            axios.get(url, {
+              params,
+              timeout: 10000,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              }
+            }).catch(err => {
+              console.error(`[MOLIT API Error] LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
+              return null;
+            })
+          );
         }
 
-        // 다음 요청 전에 300ms 지연
-        if (i < 11) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+        // 2개 동시 실행
+        responses.push(...await Promise.all(requests));
+
+        // 다음 배치 전에 100ms 지연 (레이트 제한 피하기)
+        if (i + 2 < 12) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
       console.log(`[MOLIT DEBUG] District ${lawdCd}: Total responses: ${responses.length}`);
