@@ -7,8 +7,8 @@ type EstateData = EstateRecord;
 
 // 지역코드 매핑 (국토교통부 표준) - 서울과 경기도만
 const REGION_CODES: Record<string, string> = {
-  // 서울
-  '서울': '11110',
+  // 서울 (종로구로 대표 사용 - 실제로는 25개 구 모두 요청 필요)
+  '서울': '11380',
   '강남구': '11110',
   '강동구': '11125',
   '강북구': '11130',
@@ -54,81 +54,95 @@ const REGION_CODES: Record<string, string> = {
   '남양주시': '41131',
 };
 
+// 서울의 모든 구 코드
+const SEOUL_DISTRICTS = [
+  '11110', '11125', '11130', '11140', '11150', '11160', '11170', '11180', '11190',
+  '11200', '11210', '11220', '11230', '11240', '11250', '11260', '11290', '11300',
+  '11305', '11310', '11320', '11330', '11380', '11410', '11420'
+];
+
 export async function fetchMolitData(region: string = '서울'): Promise<EstateData[]> {
   try {
-    const lawdCd = REGION_CODES[region] || '11110';
-    const serviceKey = config.MOLIT_SERVICE_KEY;
+    // 서울 요청 시 모든 구 데이터 수집
+    let lawdCodes = [REGION_CODES[region] || '11110'];
+    if (region === '서울') {
+      lawdCodes = SEOUL_DISTRICTS;
+    }
 
-    const responses = [];
+    const serviceKey = config.MOLIT_SERVICE_KEY;
+    const allData: EstateData[] = [];
     const now = new Date();
 
-    // 순차 요청 (레이트 제한 피하기 위해)
-    for (let i = 0; i < 3; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
+    // 각 지역코드별로 순차 요청
+    for (const lawdCd of lawdCodes) {
+      const responses = [];
 
-      const url = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
-      const params = {
-        serviceKey,
-        LAWD_CD: lawdCd,
-        DEAL_YMD: dealYmd,
-        pageNo: 1,
-        numOfRows: 10,
-      };
+      // 순차 요청 (레이트 제한 피하기 위해)
+      for (let i = 0; i < 3; i++) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      try {
-        const response = await axios.get(url, {
-          params,
-          timeout: 10000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          }
-        });
-        responses.push(response);
-      } catch (err) {
-        console.error(`[MOLIT API Error] DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
-        responses.push(null);
-      }
+        const url = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
+        const params = {
+          serviceKey,
+          LAWD_CD: lawdCd,
+          DEAL_YMD: dealYmd,
+          pageNo: 1,
+          numOfRows: 10,
+        };
 
-      // 요청 간 지연 (500ms)
-      if (i < 2) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-    const allData: EstateData[] = [];
-
-    console.log(`[MOLIT DEBUG] Total responses: ${responses.length}`);
-    let successCount = 0;
-
-    for (const response of responses) {
-      if (!response || !response.data) {
-        console.log(`[MOLIT DEBUG] Skipped null response`);
-        continue;
-      }
-
-      successCount++;
-      console.log(`[MOLIT DEBUG] Response ${successCount}: data size=${response.data.length}, status=${response.status}`);
-
-      const parsed = await parseStringPromise(response.data);
-      const items = parsed?.response?.body?.[0]?.items?.[0]?.item || [];
-
-      console.log(`[MOLIT DEBUG] Parsed items: ${Array.isArray(items) ? items.length : 'not array'}`);
-
-      for (const item of items) {
-        const dealAmount = parseInt(item.거래금액?.[0] || '0');
-        const area = parseFloat(item.건물면적?.[0] || '0');
-        const address = item.도로명주소?.[0] || '';
-        const dateStr = item.계약일자?.[0] || '';
-
-        if (dealAmount && dateStr) {
-          allData.push({
-            date: formatDate(dateStr),
-            price: Math.round(dealAmount / 10000),
-            area,
-            location: address,
-            region,
-            dealType: 'apts',
+        try {
+          const response = await axios.get(url, {
+            params,
+            timeout: 10000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            }
           });
+          responses.push(response);
+        } catch (err) {
+          console.error(`[MOLIT API Error] LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
+          responses.push(null);
+        }
+
+        // 요청 간 지연 (500ms)
+        if (i < 2) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      console.log(`[MOLIT DEBUG] District ${lawdCd}: Total responses: ${responses.length}`);
+      let successCount = 0;
+
+      for (const response of responses) {
+        if (!response || !response.data) {
+          console.log(`[MOLIT DEBUG] Skipped null response`);
+          continue;
+        }
+
+        successCount++;
+        console.log(`[MOLIT DEBUG] Response ${successCount}: data size=${response.data.length}, status=${response.status}`);
+
+        const parsed = await parseStringPromise(response.data);
+        const items = parsed?.response?.body?.[0]?.items?.[0]?.item || [];
+
+        console.log(`[MOLIT DEBUG] Parsed items: ${Array.isArray(items) ? items.length : 'not array'}`);
+
+        for (const item of items) {
+          const dealAmount = parseInt(item.거래금액?.[0] || '0');
+          const area = parseFloat(item.건물면적?.[0] || '0');
+          const address = item.도로명주소?.[0] || '';
+          const dateStr = item.계약일자?.[0] || '';
+
+          if (dealAmount && dateStr) {
+            allData.push({
+              date: formatDate(dateStr),
+              price: Math.round(dealAmount / 10000),
+              area,
+              location: address,
+              region,
+              dealType: 'apts',
+            });
+          }
         }
       }
     }
