@@ -26,7 +26,9 @@ interface Stats {
   locations: number
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const API_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? 'http://localhost:3001'
+  : 'https://claudeworktaegeun-production.up.railway.app'
 
 function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
