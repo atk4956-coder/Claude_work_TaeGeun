@@ -76,9 +76,9 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
     // 각 지역코드별로 순차 요청
     for (const lawdCd of lawdCodes) {
       const responses = [];
+      let debugPrinted = false;
 
-      // 병렬 요청 (동시에 3개월 데이터 요청)
-      const requests = [];
+      // 순차 요청 (레이트 제한 피하기 위해 500ms 지연)
       for (let i = 0; i < 3; i++) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -92,22 +92,25 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
           numOfRows: 10,
         };
 
-        requests.push(
-          axios.get(url, {
+        try {
+          const response = await axios.get(url, {
             params,
             timeout: 10000,
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             }
-          }).catch(err => {
-            console.error(`[MOLIT API Error] LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
-            return null;
-          })
-        );
-      }
+          });
+          responses.push(response);
+        } catch (err) {
+          console.error(`[MOLIT API Error] LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
+          responses.push(null);
+        }
 
-      // 모든 요청을 동시에 실행
-      responses.push(...await Promise.all(requests));
+        // 다음 요청 전에 500ms 지연
+        if (i < 2) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
       console.log(`[MOLIT DEBUG] District ${lawdCd}: Total responses: ${responses.length}`);
       let successCount = 0;
       let districtItemCount = 0;
@@ -127,30 +130,31 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
 
         console.log(`[MOLIT DEBUG] Parsed items: ${Array.isArray(items) ? items.length : 'not array'}`);
 
+        // 첫 번째 아이템의 필드명 출력 (디버깅용) - 강남구에서 첫 번째로 아이템을 얻었을 때
+        if (items.length > 0 && lawdCd === '11110' && !debugPrinted) {
+          debugPrinted = true;
+          console.log(`\n[DEBUG] Raw item fields:`, Object.keys(items[0]));
+          console.log(`[DEBUG] First item structure:`, JSON.stringify(items[0], null, 2).substring(0, 800));
+        }
+
         for (const item of items) {
-          // 모든 가능한 필드명 시도 (MOLIT API의 다양한 필드명 대응)
-          const dealAmount = parseInt(
-            item.거래금액?.[0] ||
-            item.dealAmount?.[0] ||
-            item.tradePrice?.[0] ||
-            '0'
-          );
-          const area = parseFloat(
-            item.건물면적?.[0] ||
-            item.area?.[0] ||
-            item.buildingArea?.[0] ||
-            '0'
-          );
-          const address =
-            item.도로명주소?.[0] ||
-            item.address?.[0] ||
-            item.roadAddress?.[0] ||
-            '';
-          const dateStr =
-            item.계약일자?.[0] ||
-            item.contractDate?.[0] ||
-            item.dealDate?.[0] ||
-            '';
+          // MOLIT API 필드명 (쉼표 제거, 분리된 날짜 처리)
+          const dealAmountStr = item.dealAmount?.[0] || '0';
+          const dealAmount = parseInt(dealAmountStr.replace(/,/g, ''));
+
+          const area = parseFloat(item.excluUseAr?.[0] || '0');
+
+          const sggNm = item.estateAgentSggNm?.[0] || '';
+          const roadNm = item.roadNm?.[0] || '';
+          const address = [sggNm, roadNm].filter(Boolean).join(' ');
+
+          // 날짜는 분리되어 있음: dealYear, dealMonth, dealDay
+          const dealYear = item.dealYear?.[0] || '';
+          const dealMonth = item.dealMonth?.[0] || '';
+          const dealDay = item.dealDay?.[0] || '';
+          const dateStr = dealYear && dealMonth && dealDay
+            ? `${dealYear}${String(dealMonth).padStart(2, '0')}${String(dealDay).padStart(2, '0')}`
+            : '';
 
           if (dealAmount && dateStr) {
             allData.push({
@@ -162,10 +166,6 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
               dealType: 'apts',
             });
             districtItemCount++;
-          } else if (lawdCd === '11110' && successCount === 1) {
-            // 첫 번째 실패 항목의 필드 출력 (디버깅용)
-            console.log(`\n[DEBUG] Item fields:`, Object.keys(item));
-            console.log(`[DEBUG] Sample item:`, JSON.stringify(item, null, 2).substring(0, 500));
           }
         }
       }
