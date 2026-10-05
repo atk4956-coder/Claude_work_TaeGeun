@@ -174,18 +174,28 @@ function formatDate(dateStr: string): string {
 }
 
 function getMockData(region: string = '서울'): EstateData[] {
-  // 서울 데이터
+  // 서울 데이터 (모든 주요 구 포함)
   const seoulData = [
+    // 강남구
     { date: '2024-01-28', price: 850000, area: 84.95, location: '서울시 강남구', dealType: 'apts' },
-    { date: '2024-01-25', price: 820000, area: 59.80, location: '서울시 서초구', dealType: 'apts' },
+    { date: '2024-01-25', price: 820000, area: 59.80, location: '서울시 강남구', dealType: 'apts' },
     { date: '2024-01-22', price: 780000, area: 84.95, location: '서울시 강남구', dealType: 'apts' },
+    // 서초구
     { date: '2024-01-18', price: 810000, area: 101.50, location: '서울시 서초구', dealType: 'apts' },
-    { date: '2024-01-15', price: 800000, area: 84.95, location: '서울시 강남구', dealType: 'apts' },
+    { date: '2024-01-15', price: 800000, area: 84.95, location: '서울시 서초구', dealType: 'apts' },
     { date: '2024-01-10', price: 750000, area: 59.80, location: '서울시 서초구', dealType: 'apts' },
-    { date: '2024-01-08', price: 790000, area: 84.95, location: '서울시 강남구', dealType: 'apts' },
-    { date: '2024-01-05', price: 820000, area: 101.50, location: '서울시 서초구', dealType: 'apts' },
-    { date: '2023-12-28', price: 820000, area: 84.95, location: '서울시 강남구', dealType: 'apts' },
-    { date: '2023-12-25', price: 800000, area: 59.80, location: '서울시 서초구', dealType: 'apts' },
+    // 강서구
+    { date: '2024-01-08', price: 720000, area: 74.50, location: '서울시 강서구', dealType: 'apts' },
+    { date: '2024-01-05', price: 710000, area: 68.30, location: '서울시 강서구', dealType: 'apts' },
+    { date: '2023-12-28', price: 740000, area: 80.00, location: '서울시 강서구', dealType: 'apts' },
+    // 마포구
+    { date: '2023-12-25', price: 680000, area: 72.50, location: '서울시 마포구', dealType: 'apts' },
+    { date: '2023-12-20', price: 690000, area: 75.00, location: '서울시 마포구', dealType: 'apts' },
+    { date: '2023-12-15', price: 670000, area: 70.00, location: '서울시 마포구', dealType: 'apts' },
+    // 용산구
+    { date: '2023-12-10', price: 760000, area: 85.00, location: '서울시 용산구', dealType: 'apts' },
+    { date: '2023-12-05', price: 750000, area: 82.00, location: '서울시 용산구', dealType: 'apts' },
+    { date: '2023-11-30', price: 770000, area: 88.00, location: '서울시 용산구', dealType: 'apts' },
   ];
 
   // 경기도 데이터 (성남시, 수원시)
