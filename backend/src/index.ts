@@ -13,15 +13,24 @@ const app = express();
 // Initialize database
 initializeDatabase();
 
+// 메모리 캐시
+const dataCache: Record<string, any[]> = {};
+
 // Auto-load initial data on startup (Seoul + Gyeonggi only)
 (async () => {
   try {
     console.log('[Init] Loading initial data for Seoul and Gyeonggi...');
 
     // 서울과 경기도만 미리 로드 (나머지는 온디맨드)
-    await fetchMolitData('서울');
+    const seoulData = await fetchMolitData('서울');
+    dataCache['서울'] = seoulData;
+    console.log(`[Cache] Cached Seoul data: ${seoulData.length} records`);
+
     await new Promise(resolve => setTimeout(resolve, 500)); // 500ms 지연
-    await fetchMolitData('경기도');
+
+    const gyeonggiData = await fetchMolitData('경기도');
+    dataCache['경기도'] = gyeonggiData;
+    console.log(`[Cache] Cached Gyeonggi data: ${gyeonggiData.length} records`);
 
     console.log('[Init] Initial data loaded: Seoul + Gyeonggi');
   } catch (err) {
@@ -108,9 +117,17 @@ app.get('/api/estates', async (req, res) => {
 
     console.log(`[API] /api/estates called with region: "${regionStr}"`);
 
-    // Fetch data from specified region
-    const allData = await fetchMolitData(regionStr);
-    console.log(`[API] Fetched ${allData.length} records for region: "${regionStr}"`);
+    // 캐시에서 먼저 확인
+    let allData = dataCache[regionStr];
+    if (!allData) {
+      console.log(`[Cache] Miss for region: "${regionStr}", fetching from MOLIT API...`);
+      allData = await fetchMolitData(regionStr);
+      dataCache[regionStr] = allData;
+      console.log(`[Cache] Cached ${allData.length} records for region: "${regionStr}"`);
+    } else {
+      console.log(`[Cache] Hit for region: "${regionStr}" (${allData.length} records)`);
+    }
+    console.log(`[API] Using ${allData.length} records for region: "${regionStr}"`);
 
     // Filter by location if region is a specific district (서울 구)
     let filteredData = allData;
