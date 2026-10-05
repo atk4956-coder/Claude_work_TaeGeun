@@ -16,35 +16,29 @@ initializeDatabase();
 // 메모리 캐시
 const dataCache: Record<string, any[]> = {};
 
-// Auto-load initial data on startup (Seoul + Gyeonggi, all districts)
+// Fast initial load: Seoul + Gyeonggi only
 (async () => {
   try {
-    console.log('[Init] Loading initial data for Seoul and Gyeonggi (all districts)...');
+    console.log('[Init] Fast loading: Seoul + Gyeonggi...');
+    console.time('[Init] Time');
 
-    // 서울과 경기도만 미리 로드
     const seoulData = await fetchMolitData('서울');
     dataCache['서울'] = seoulData;
-    console.log(`[Cache] Cached Seoul data: ${seoulData.length} records`);
 
-    // 각 구별로도 캐시 (프론트엔드에서 선택할 수 있도록)
+    const gyeonggiData = await fetchMolitData('경기도');
+    dataCache['경기도'] = gyeonggiData;
+
+    // 각 구별로도 캐시
     const seoulGus = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'];
     for (const gu of seoulGus) {
       const guData = seoulData.filter(d => d.location.includes(gu));
       dataCache[gu] = guData;
-      if (guData.length > 0) {
-        console.log(`[Cache] Cached ${gu}: ${guData.length} records`);
-      }
     }
 
-    await new Promise(resolve => setTimeout(resolve, 500)); // 500ms 지연
-
-    const gyeonggiData = await fetchMolitData('경기도');
-    dataCache['경기도'] = gyeonggiData;
-    console.log(`[Cache] Cached Gyeonggi data: ${gyeonggiData.length} records`);
-
-    console.log('[Init] Initial data loaded: Seoul (all 25 districts) + Gyeonggi');
+    console.timeEnd('[Init] Time');
+    console.log('[Init] Initial load complete. Cache ready for all districts.');
   } catch (err) {
-    console.error('[Init] Error loading initial data:', err);
+    console.error('[Init] Error:', err);
   }
 })();
 

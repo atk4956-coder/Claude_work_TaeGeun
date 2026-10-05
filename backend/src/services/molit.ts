@@ -77,7 +77,8 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
     for (const lawdCd of lawdCodes) {
       const responses = [];
 
-      // 순차 요청 (레이트 제한 피하기 위해)
+      // 병렬 요청 (동시에 3개월 데이터 요청)
+      const requests = [];
       for (let i = 0; i < 3; i++) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -91,25 +92,22 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
           numOfRows: 10,
         };
 
-        try {
-          const response = await axios.get(url, {
+        requests.push(
+          axios.get(url, {
             params,
             timeout: 10000,
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             }
-          });
-          responses.push(response);
-        } catch (err) {
-          console.error(`[MOLIT API Error] LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
-          responses.push(null);
-        }
-
-        // 요청 간 지연 (500ms)
-        if (i < 2) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
+          }).catch(err => {
+            console.error(`[MOLIT API Error] LAWD_CD=${lawdCd}, DEAL_YMD=${dealYmd}:`, err instanceof Error ? err.message : String(err));
+            return null;
+          })
+        );
       }
+
+      // 모든 요청을 동시에 실행
+      responses.push(...await Promise.all(requests));
       console.log(`[MOLIT DEBUG] District ${lawdCd}: Total responses: ${responses.length}`);
       let successCount = 0;
       let districtItemCount = 0;
