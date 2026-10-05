@@ -79,7 +79,7 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
       let debugPrinted = false;
 
       // 순차 요청 (레이트 제한 피하기 위해 500ms 지연)
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 12; i++) {
         const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const dealYmd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`;
 
@@ -106,9 +106,9 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
           responses.push(null);
         }
 
-        // 다음 요청 전에 500ms 지연
-        if (i < 2) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+        // 다음 요청 전에 300ms 지연
+        if (i < 11) {
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
       console.log(`[MOLIT DEBUG] District ${lawdCd}: Total responses: ${responses.length}`);
