@@ -62,12 +62,12 @@ cp backend/.env.example backend/.env
   - React + Vite 프론트엔드 기본 구조
   - FE ↔ BE 헬스체크 통신 확인
 
-- ⏳ **Phase 2**: 첫 데이터 연동 (다음 세션)
+- ✅ **Phase 2**: MOLIT 실데이터 연동, 지역 선택, 차트 (완료)
   - 국토부 API 키 발급
   - MOLIT 실거래가 API 연동
   - 첫 번째 차트 렌더링
 
-- ⏳ **Phase 3**: DB 저장 + 자동 갱신
+- 🔄 **Phase 3**: DB 저장(구현) + 자동 갱신(미구현)
 - ⏳ **Phase 4**: 지표 확장 (지역선택, 이동평균 등)
 - ⏳ **Phase 5**: 트렌드 요약 + 폴리싱
 
@@ -85,10 +85,7 @@ cp backend/.env.example backend/.env
 
 ## 다음 단계
 
-Phase 2 진행을 위해:
-1. data.go.kr에서 MOLIT 실거래가 API 키 발급
-2. `backend/.env`에 키 설정
-3. 첫 데이터 fetch + 차트 렌더링 구현
+자세한 현황과 할 일은 CLAUDE.md를 참고하세요.
 
 ---
 

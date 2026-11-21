@@ -1,123 +1,65 @@
 # 부동산 시장 분석 플랫폼 - 프로젝트 가이드
 
-## 📊 프로젝트 개요
-
-한국 부동산 시장을 분석하는 웹 애플리케이션입니다.
-- **Backend**: Express + Node.js (포트 3001)
-- **Frontend**: React + Vite (포트 5174)
+한국(서울·경기) 아파트 실거래가를 분석하는 웹앱입니다.
+- **Backend**: Express + TypeScript (포트 3001), 국토부 MOLIT API, 메모리 캐시, 선택적 PostgreSQL(`DATABASE_URL`)
+- **Frontend**: React + Vite + Recharts (포트 5173, `/api`는 3001로 프록시)
 - **Shared**: 공유 타입/유틸리티
+- **배포**: Railway(주), Render. 백엔드가 `frontend/dist`를 정적 서빙
 
----
+## 현재 상태 (2026-11-22 기준)
 
-## ✅ 현재 진행 상황
+- ✅ Phase 1: 스캐폴딩, 헬스체크
+- ✅ Phase 2: MOLIT 실데이터 연동(서울 25개 구 × 최근 12개월), 지역 선택, 통계 카드, 차트
+- 🔄 Phase 3: DB 저장은 구현됨(`DATABASE_URL` 있을 때만). 자동 갱신(크론)과 DB 우선 로딩은 미구현
+- ⏳ Phase 4~5: 이동평균 등 지표 확장, 트렌드 요약
 
-### Phase 1 ✓ (완료: 2026-08-19)
-- Express 백엔드 기본 구조
-- React + Vite 프론트엔드 기본 구조
-- FE ↔ BE 헬스체크 통신 확인
+## 실행
 
-### Phase 2 🔄 (진행 중: 2026-08-19)
-- ✅ 모의 데이터 기반 `/api/estates` 엔드포인트 완성
-- ✅ Recharts 차트 컴포넌트 구현
-- ✅ 프론트엔드에서 백엔드 API 호출 및 차트 렌더링
-- ⏳ 다음: 실제 MOLIT API 연동 (국토부 API 키 설정 후)
-
----
-
-## 🚀 개발 시작 방법
-
-### 단계별 실행 (권장)
-
-**터미널 1 - 백엔드:**
 ```bash
-cd C:\Users\PC\Desktop\TG\0_Claude\work\TestProject
-npm run dev:backend
-# 포트 3001에서 실행
+npm install
+npm run dev:backend    # 터미널 1
+npm run dev:frontend   # 터미널 2 → http://localhost:5173
 ```
 
-**터미널 2 - 프론트엔드:**
-```bash
-cd C:\Users\PC\Desktop\TG\0_Claude\work\TestProject
-npm run dev:frontend
-# 포트 5174에서 실행
-```
+환경변수는 `backend/.env`(템플릿: `backend/.env.example`). `MOLIT_SERVICE_KEY` 필수.
+`ADMIN_TOKEN`을 설정해야 `/api/reset`, `/api/sync`를 `x-admin-token` 헤더로 호출할 수 있습니다.
 
-**브라우저:**
-- http://localhost:5174
+## API
 
-### 한 번에 실행 (선택사항)
-```bash
-npm run dev
-```
-(각 프로세스가 분리되지 않으므로 권장하지 않음)
+| 엔드포인트 | 설명 |
+|---|---|
+| `GET /api/health` | 헬스체크 |
+| `GET /api/estates?region=&limit=` | 거래 목록 (최신순, 기본 100건) |
+| `GET /api/stats?region=` | 요약 통계 |
+| `GET /api/trend?region=` | 월별 평균 거래가·㎡당 가격·거래건수 |
+| `GET /api/reset`, `/api/sync` | 관리용 (ADMIN_TOKEN 필요) |
 
----
+가격 단위는 **만원**입니다. 화면에서는 `formatPrice`로 억 단위 표기.
 
-## 🔧 중요한 파일
+## 중요한 파일
 
 | 파일 | 설명 |
-|-----|------|
-| `backend/src/index.ts` | 백엔드 메인 파일 (Express 앱) |
-| `backend/src/services/molit.ts` | MOLIT API 서비스 (현재 모의 데이터) |
-| `backend/src/config/env.ts` | 환경변수 설정 (zod 스키마) |
-| `backend/.env.example` | 환경변수 템플릿 |
-| `backend/.env` | 실제 환경변수 (git 무시됨) |
-| `frontend/src/App.tsx` | 프론트엔드 메인 (Recharts 차트) |
+|---|---|
+| `backend/src/index.ts` | Express 앱, 캐시, API 라우트 |
+| `backend/src/services/molit.ts` | MOLIT 호출, 지역(LAWD_CD) 코드, 모의 데이터 폴백 |
+| `backend/src/services/database.ts` | PostgreSQL 저장/조회 |
+| `backend/src/config/env.ts` | 환경변수 스키마(zod) |
+| `frontend/src/App.tsx` | 화면 전체 |
 
----
+## 알려진 이슈 / 주의
 
-## ⚠️ 알려진 이슈 및 해결책
+- MOLIT 호출은 월별 `numOfRows=100` 상한이라 거래가 많은 구는 월 일부만 수집됨 (월별 평균이 표본 기반)
+- 최초 서울 로딩에 약 20초 (25개 구 × 12개월). 로딩 중 요청은 느릴 수 있음
+- 가격 단위를 억→만원으로 바꿨으므로, 이전에 저장된 DB 데이터는 `/api/reset`으로 재적재 필요
+- MOLIT 키는 URL 인코딩 상태로 복사되므로 `env.ts`에서 `decodeURIComponent` 처리
+- Node `--loader` 대신 `--import tsx` 사용 (backend dev 스크립트)
+- 경기도 전체는 성남·수원·고양·용인만 조회
 
-### Node.js tsx 로더 문제
-- **문제**: `--loader` 플래그는 Node v20.6.0+에서 deprecated
-- **해결**: `backend/package.json`의 dev 스크립트를 `--import`로 변경
-- **상태**: ✅ 고정됨 (2026-08-19)
+## 다음 할 일
 
-### MOLIT API 키 인코딩
-- **문제**: data.go.kr에서 복사한 API 키가 URL 인코딩 상태
-- **해결**: `backend/src/config/env.ts`에서 `decodeURIComponent()` 처리
-- **상태**: ✅ 고정됨 (2026-08-19)
+1. MOLIT 수집량 상한 해결(페이지네이션) 및 DB 우선 로딩/백그라운드 갱신
+2. 자동 갱신(크론)
+3. 이동평균 등 지표, 트렌드 요약
+4. 경기도 시·군 확대, 거래 유형 확대
 
----
-
-## 📝 Phase 2 다음 단계 (내일 또는 나중)
-
-### 실제 MOLIT API 연동
-1. data.go.kr에서 API 키 발급받기
-2. `backend/.env`에 키 설정
-3. `backend/src/services/molit.ts`에서 실제 API 호출 구현
-4. XML 응답 파싱
-
-### 데이터 개선
-- 지역별 데이터 필터링
-- 날짜 범위 필터
-- 거래 유형별 필터
-
-### Phase 3 예정
-- SQLite 데이터베이스 연동
-- 자동 데이터 갱신 (크론 작업)
-- 다양한 지표 추가 (전세수급지수, 입주물량 등)
-
----
-
-## 📚 참고 자료
-
-- **data.go.kr**: https://www.data.go.kr/
-- **Express**: https://expressjs.com/
-- **React**: https://react.dev/
-- **Vite**: https://vitejs.dev/
-- **Recharts**: https://recharts.org/
-
----
-
-## 💡 개발 팁
-
-- **HMR 활성화**: Vite는 자동으로 핫 모듈 리로드 지원
-- **Workspace 구조**: npm workspaces로 관리 → `npm run dev:backend` / `npm run dev:frontend` 사용
-- **TypeScript**: 각 워크스페이스에서 `tsconfig.json` 확인
-- **환경변수**: `.env.example`을 항상 먼저 확인
-
----
-
-**마지막 업데이트**: 2026-08-19
-**작업자**: atk4956@gmail.com
+**마지막 업데이트**: 2026-11-22
