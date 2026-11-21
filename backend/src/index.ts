@@ -164,6 +164,50 @@ app.get('/api/estates', async (req, res) => {
   }
 });
 
+// 월별 집계 추이 (평균 거래가, ㎡당 평균가, 거래건수)
+app.get('/api/trend', async (req, res) => {
+  try {
+    const regionStr = ((req.query.region as string) || '서울').trim();
+
+    let allData = dataCache[regionStr];
+    if (!allData) {
+      allData = await fetchMolitData(regionStr);
+      dataCache[regionStr] = allData;
+    }
+
+    const data = SEOUL_GU_LIST.includes(regionStr)
+      ? allData.filter(d => d.location.includes(regionStr))
+      : allData;
+
+    const byMonth = new Map<string, { sum: number; perArea: number; count: number }>();
+    for (const d of data) {
+      const month = d.date.substring(0, 7);
+      const m = byMonth.get(month) || { sum: 0, perArea: 0, count: 0 };
+      m.sum += d.price;
+      m.perArea += d.area > 0 ? d.price / d.area : 0;
+      m.count += 1;
+      byMonth.set(month, m);
+    }
+
+    const trend = [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, m]) => ({
+        month,
+        avgPrice: Math.round(m.sum / m.count),
+        pricePerArea: Math.round((m.perArea / m.count) * 100) / 100,
+        count: m.count,
+      }));
+
+    res.json({ success: true, trend });
+  } catch (error) {
+    console.error('[API] /api/trend error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 app.get('/api/stats', async (req, res) => {
   try {
     const { region } = req.query;
