@@ -1,4 +1,4 @@
-﻿# 📱 Frontend 배포 가이드 (Railway)
+# 📱 Frontend 배포 가이드 (Railway)
 
 ## 준비 사항
 - Backend가 Railway에서 Online 상태로 실행 중
@@ -16,7 +16,7 @@
 3. **+ Add Service** 클릭
 4. **Deploy from GitHub** 선택
 5. Repository 선택: atk4956-coder/Claude_work_TaeGeun
-6. **Root Directory** 입력: \rontend\
+6. **Root Directory** 입력: frontend
 7. **Save** 클릭 (중요!)
 
 ### Step 3: Frontend 배포 대기

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+﻿import { useState, useEffect } from 'react'
+import { LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import './App.css'
 
 interface HealthResponse {
@@ -79,6 +79,9 @@ function App() {
 
     fetchData()
   }, [region])
+
+  // 서버는 최신순으로 반환하므로 차트는 시간 오름차순으로 뒤집는다
+  const chartData = [...estates].reverse()
 
   const statsData = stats ? [
     { label: '평균 거래가', value: `${stats.avgPrice}만원` },
@@ -170,7 +173,7 @@ function App() {
             <section className="chart-section">
               <h2>실거래가 추이</h2>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={estates}>
+                <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
                   <YAxis />
@@ -188,22 +191,16 @@ function App() {
             </section>
 
             <section className="chart-section">
-              <h2>면적별 분포</h2>
+              <h2>면적별 거래가 분포</h2>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={estates}>
+                <ScatterChart>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip formatter={(value: any) => `${value}㎡`} />
+                  <XAxis type="number" dataKey="area" name="면적" unit="㎡" />
+                  <YAxis type="number" dataKey="price" name="거래가" unit="만원" />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} />
                   <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="area"
-                    stroke="#82ca9d"
-                    name="면적(㎡)"
-                    dot={false}
-                  />
-                </LineChart>
+                  <Scatter name="거래 (면적 vs 가격)" data={estates} fill="#82ca9d" />
+                </ScatterChart>
               </ResponsiveContainer>
             </section>
           </>
