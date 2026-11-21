@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+﻿import { useState, useEffect } from 'react'
+import { LineChart, Line, ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import './App.css'
 
 interface HealthResponse {
@@ -12,6 +12,19 @@ interface EstateData {
   price: number
   area: number
   location: string
+}
+
+interface TrendPoint {
+  month: string
+  avgPrice: number
+  pricePerArea: number
+  count: number
+}
+
+// 만원 단위를 억/만원 표기로 변환 (예: 127212 -> 12.7억)
+function formatPrice(v: number): string {
+  if (v >= 10000) return `${(v / 10000).toFixed(1)}억`
+  return `${v.toLocaleString()}만원`
 }
 
 interface Stats {
@@ -34,6 +47,7 @@ function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [estates, setEstates] = useState<EstateData[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
+  const [trend, setTrend] = useState<TrendPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [region, setRegion] = useState('서울')
@@ -47,27 +61,30 @@ function App() {
         const encodedRegion = encodeURIComponent(region)
         console.log(`[FE] Fetching data for region: ${region} (encoded: ${encodedRegion})`)
 
-        const [healthRes, estatesRes, statsRes] = await Promise.all([
+        const [healthRes, estatesRes, statsRes, trendRes] = await Promise.all([
           fetch(`${API_URL}/api/health`),
           fetch(`${API_URL}/api/estates?region=${encodedRegion}`),
           fetch(`${API_URL}/api/stats?region=${encodedRegion}`),
+          fetch(`${API_URL}/api/trend?region=${encodedRegion}`),
         ])
 
         console.log(`[FE] Responses: health=${healthRes.ok}, estates=${estatesRes.ok}, stats=${statsRes.ok}`)
 
-        if (!healthRes.ok || !estatesRes.ok || !statsRes.ok) {
+        if (!healthRes.ok || !estatesRes.ok || !statsRes.ok || !trendRes.ok) {
           throw new Error('API call failed')
         }
 
         const healthData = await healthRes.json()
         const estatesData = await estatesRes.json()
         const statsData = await statsRes.json()
+        const trendData = await trendRes.json()
 
         console.log(`[FE] Data loaded: ${estatesData.data?.length || 0} estates, stats=`, statsData.stats)
 
         setHealth(healthData)
         setEstates(estatesData.data || [])
         setStats(statsData.stats)
+        setTrend(trendData.trend || [])
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error'
         console.error('[FE] Error:', errorMsg)
@@ -81,11 +98,11 @@ function App() {
   }, [region])
 
   const statsData = stats ? [
-    { label: '평균 거래가', value: `${stats.avgPrice}만원` },
-    { label: '최고가', value: `${stats.maxPrice}만원` },
-    { label: '최저가', value: `${stats.minPrice}만원` },
+    { label: '평균 거래가', value: formatPrice(stats.avgPrice) },
+    { label: '최고가', value: formatPrice(stats.maxPrice) },
+    { label: '최저가', value: formatPrice(stats.minPrice) },
     { label: '평균 면적', value: `${stats.avgArea}㎡` },
-    { label: '평균 가격/㎡', value: `${stats.pricePerArea}만원` },
+    { label: '평균 가격/㎡', value: `${Math.round(stats.pricePerArea).toLocaleString()}만원` },
     { label: '거래건수', value: `${stats.totalDeals}건` },
     { label: '활성 지역', value: `${stats.locations}곳` },
   ] : []
@@ -165,45 +182,38 @@ function App() {
           </section>
         )}
 
-        {!loading && estates.length > 0 && (
+        {!loading && trend.length > 0 && (
           <>
             <section className="chart-section">
-              <h2>실거래가 추이</h2>
+              <h2>월별 평균 거래가 추이</h2>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={estates}>
+                <LineChart data={trend} margin={{ left: 10, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip formatter={(value: any) => `${value}만원`} />
+                  <XAxis dataKey="month" />
+                  <YAxis width={70} tickFormatter={(v: number) => formatPrice(v)} />
+                  <Tooltip formatter={(value: any) => formatPrice(Number(value))} />
                   <Legend />
                   <Line
                     type="monotone"
-                    dataKey="price"
+                    dataKey="avgPrice"
                     stroke="#8884d8"
-                    name="거래가격(만원)"
-                    dot={false}
+                    name="평균 거래가"
                   />
                 </LineChart>
               </ResponsiveContainer>
             </section>
 
             <section className="chart-section">
-              <h2>면적별 분포</h2>
+              <h2>면적별 거래가 분포</h2>
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={estates}>
+                <ScatterChart margin={{ left: 10, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip formatter={(value: any) => `${value}㎡`} />
+                  <XAxis type="number" dataKey="area" name="면적" unit="㎡" />
+                  <YAxis type="number" dataKey="price" name="거래가" width={70} tickFormatter={(v: number) => formatPrice(v)} />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} />
                   <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="area"
-                    stroke="#82ca9d"
-                    name="면적(㎡)"
-                    dot={false}
-                  />
-                </LineChart>
+                  <Scatter name="거래 (면적 vs 가격)" data={estates} fill="#82ca9d" />
+                </ScatterChart>
               </ResponsiveContainer>
             </section>
           </>
@@ -211,7 +221,7 @@ function App() {
 
         <section className="info">
           <h2>데이터</h2>
-          <p>총 {estates.length}건의 거래 데이터 (최근 12개월)</p>
+          <p>총 {stats?.totalDeals ?? 0}건의 거래 데이터 (최근 12개월, 산점도는 최신 {estates.length}건)</p>
           {estates.length > 0 ? (
             <p>✅ 데이터 로드 완료 (PostgreSQL + MOLIT API)</p>
           ) : (

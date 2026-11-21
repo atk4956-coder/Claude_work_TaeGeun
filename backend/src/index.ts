@@ -1,14 +1,25 @@
-import 'dotenv/config';
+﻿import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { join } from 'path';
 import * as dns from 'dns';
 import axios from 'axios';
 import { config } from './config/env.js';
-import { fetchMolitData } from './services/molit.js';
+import { fetchMolitData, SEOUL_GU_CODES } from './services/molit.js';
 import { initializeDatabase, saveEstateRecords, clearDatabase } from './services/database.js';
 
 const app = express();
+
+const SEOUL_GU_LIST = Object.keys(SEOUL_GU_CODES);
+
+// 관리용 엔드포인트(reset/sync) 보호: ADMIN_TOKEN 환경변수 필요
+function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const token = process.env.ADMIN_TOKEN;
+  if (!token || req.header('x-admin-token') !== token) {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
+  next();
+}
 
 // Initialize database
 initializeDatabase();
@@ -26,7 +37,7 @@ const dataCache: Record<string, any[]> = {};
     dataCache['서울'] = seoulData;
 
     // 각 구별로도 캐시 (서울 데이터 필터링)
-    const seoulGus = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'];
+    const seoulGus = SEOUL_GU_LIST;
     for (const gu of seoulGus) {
       const guData = seoulData.filter(d => d.location.includes(gu));
       dataCache[gu] = guData;
@@ -132,7 +143,7 @@ app.get('/api/estates', async (req, res) => {
 
     // Filter by location if region is a specific district (서울 구)
     let filteredData = allData;
-    const seoulGus = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'];
+    const seoulGus = SEOUL_GU_LIST;
     if (seoulGus.includes(regionStr)) {
       filteredData = allData.filter(d => d.location.includes(regionStr));
       console.log(`[API] Filtered by Seoul district: ${filteredData.length} records`);
@@ -153,6 +164,50 @@ app.get('/api/estates', async (req, res) => {
   }
 });
 
+// 월별 집계 추이 (평균 거래가, ㎡당 평균가, 거래건수)
+app.get('/api/trend', async (req, res) => {
+  try {
+    const regionStr = ((req.query.region as string) || '서울').trim();
+
+    let allData = dataCache[regionStr];
+    if (!allData) {
+      allData = await fetchMolitData(regionStr);
+      dataCache[regionStr] = allData;
+    }
+
+    const data = SEOUL_GU_LIST.includes(regionStr)
+      ? allData.filter(d => d.location.includes(regionStr))
+      : allData;
+
+    const byMonth = new Map<string, { sum: number; perArea: number; count: number }>();
+    for (const d of data) {
+      const month = d.date.substring(0, 7);
+      const m = byMonth.get(month) || { sum: 0, perArea: 0, count: 0 };
+      m.sum += d.price;
+      m.perArea += d.area > 0 ? d.price / d.area : 0;
+      m.count += 1;
+      byMonth.set(month, m);
+    }
+
+    const trend = [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, m]) => ({
+        month,
+        avgPrice: Math.round(m.sum / m.count),
+        pricePerArea: Math.round((m.perArea / m.count) * 100) / 100,
+        count: m.count,
+      }));
+
+    res.json({ success: true, trend });
+  } catch (error) {
+    console.error('[API] /api/trend error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 app.get('/api/stats', async (req, res) => {
   try {
     const { region } = req.query;
@@ -160,13 +215,16 @@ app.get('/api/stats', async (req, res) => {
 
     console.log(`[API] /api/stats called with region: "${regionStr}"`);
 
-    // Fetch data from specified region
-    const allData = await fetchMolitData(regionStr);
+    let allData = dataCache[regionStr];
+    if (!allData) {
+      allData = await fetchMolitData(regionStr);
+      dataCache[regionStr] = allData;
+    }
     console.log(`[API] Fetched ${allData.length} records for region: "${regionStr}"`);
 
     // Filter by location if region is a specific district (서울 구)
     let filteredData = allData;
-    const seoulGus = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'];
+    const seoulGus = SEOUL_GU_LIST;
     if (seoulGus.includes(regionStr)) {
       filteredData = allData.filter(d => d.location.includes(regionStr));
       console.log(`[API] Filtered by Seoul district: ${filteredData.length} records`);
@@ -185,7 +243,6 @@ app.get('/api/stats', async (req, res) => {
     const areas = filteredData.map(d => d.area);
     const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
     const avgArea = Math.round((areas.reduce((a, b) => a + b, 0) / areas.length) * 100) / 100;
-    const totalPrice = avgPrice * filteredData.length;
 
     const stats = {
       totalDeals: filteredData.length,
@@ -195,7 +252,7 @@ app.get('/api/stats', async (req, res) => {
       avgArea,
       minArea: Math.min(...areas),
       maxArea: Math.max(...areas),
-      pricePerArea: avgArea > 0 ? Math.round((totalPrice / (avgArea * filteredData.length)) * 100) / 100 : 0,
+      pricePerArea: Math.round(filteredData.reduce((a, d) => a + (d.area > 0 ? d.price / d.area : 0), 0) / filteredData.length * 100) / 100,
       locations: new Set(filteredData.map(d => d.location)).size,
     };
 
@@ -211,7 +268,7 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // Reset and reload data
-app.get('/api/reset', async (_req, res) => {
+app.get('/api/reset', requireAdmin, async (_req, res) => {
   try {
     console.log('[Reset] Clearing database and reloading data...');
 
@@ -244,7 +301,7 @@ app.get('/api/reset', async (_req, res) => {
 });
 
 // Sync data from MOLIT API
-app.get('/api/sync', async (_req, res) => {
+app.get('/api/sync', requireAdmin, async (_req, res) => {
   try {
     console.log('[Sync] Starting data sync for Seoul and Gyeonggi...');
 

@@ -1,72 +1,50 @@
-import axios from 'axios';
+﻿import axios from 'axios';
 import { parseStringPromise } from 'xml2js';
 import { config } from '../config/env.js';
 import { saveEstateRecords, EstateRecord } from './database.js';
 
 type EstateData = EstateRecord;
 
-// 지역코드 매핑 (국토교통부 표준) - 서울과 경기도만
-const REGION_CODES: Record<string, string> = {
-  // 서울 (종로구로 대표 사용 - 실제로는 25개 구 모두 요청 필요)
-  '서울': '11380',
-  '강남구': '11110',
-  '강동구': '11125',
-  '강북구': '11130',
-  '강서구': '11140',
-  '관악구': '11150',
-  '광진구': '11160',
-  '구로구': '11170',
-  '금천구': '11180',
-  '노원구': '11190',
-  '도봉구': '11200',
-  '동대문구': '11210',
-  '동작구': '11220',
-  '마포구': '11230',
-  '서대문구': '11240',
-  '서초구': '11250',
-  '성동구': '11260',
-  '성북구': '11290',
-  '송파구': '11300',
-  '양천구': '11305',
-  '영등포구': '11310',
-  '용산구': '11320',
-  '은평구': '11330',
-  '종로구': '11380',
-  '중구': '11410',
-  '중랑구': '11420',
-  // 경기도
-  '경기도': '41135',
-  '경기': '41135',
-  '성남시': '41135',
-  '수원시': '41110',
-  '고양시': '41210',
-  '용인시': '41270',
-  '안산시': '41280',
-  '안양시': '41290',
-  '부천시': '41460',
-  '평택시': '42130',
-  '화성시': '42170',
-  '김포시': '42150',
-  '광명시': '41380',
-  '하남시': '41300',
-  '오산시': '42160',
-  '의정부시': '41410',
-  '남양주시': '41131',
+// 지역코드 매핑 (법정동 코드 앞 5자리, LAWD_CD)
+export const SEOUL_GU_CODES: Record<string, string> = {
+  '종로구': '11110', '중구': '11140', '용산구': '11170', '성동구': '11200', '광진구': '11215',
+  '동대문구': '11230', '중랑구': '11260', '성북구': '11290', '강북구': '11305', '도봉구': '11320',
+  '노원구': '11350', '은평구': '11380', '서대문구': '11410', '마포구': '11440', '양천구': '11470',
+  '강서구': '11500', '구로구': '11530', '금천구': '11545', '영등포구': '11560', '동작구': '11590',
+  '관악구': '11620', '서초구': '11650', '강남구': '11680', '송파구': '11710', '강동구': '11740',
 };
 
-// 서울의 모든 구 코드
-const SEOUL_DISTRICTS = [
-  '11110', '11125', '11130', '11140', '11150', '11160', '11170', '11180', '11190',
-  '11200', '11210', '11220', '11230', '11240', '11250', '11260', '11290', '11300',
-  '11305', '11310', '11320', '11330', '11380', '11410', '11420'
-];
+// 경기도 주요 시 (구가 있는 시는 대표 코드 사용)
+const GYEONGGI_CODES: Record<string, string> = {
+  '수원시': '41110', '성남시': '41130', '의정부시': '41150', '안양시': '41170', '부천시': '41190',
+  '광명시': '41210', '평택시': '41220', '안산시': '41270', '고양시': '41280', '남양주시': '41360',
+  '오산시': '41370', '하남시': '41450', '용인시': '41460', '김포시': '41570', '화성시': '41590',
+};
 
+const REGION_CODES: Record<string, string> = {
+  ...SEOUL_GU_CODES,
+  ...GYEONGGI_CODES,
+};
+
+// 경기도 전체 요청 시 조회할 대표 시 (전체 시군 조회는 호출 수가 너무 많음)
+const GYEONGGI_DEFAULT = ['성남시', '수원시', '고양시', '용인시'];
+
+// 코드 → 이름 (location 생성용)
+const CODE_TO_NAME: Record<string, string> = Object.fromEntries(
+  Object.entries(REGION_CODES).map(([name, code]) => [code, name])
+);
 export async function fetchMolitData(region: string = '서울'): Promise<EstateData[]> {
   try {
     // 서울 요청 시 모든 구 데이터 수집
-    let lawdCodes = [REGION_CODES[region] || '11110'];
+    let lawdCodes: string[];
     if (region === '서울') {
-      lawdCodes = SEOUL_DISTRICTS;
+      lawdCodes = Object.values(SEOUL_GU_CODES);
+    } else if (region === '경기도' || region === '경기') {
+      lawdCodes = GYEONGGI_DEFAULT.map(n => REGION_CODES[n]);
+    } else if (REGION_CODES[region]) {
+      lawdCodes = [REGION_CODES[region]];
+    } else {
+      throw new Error(`Unknown region: ${region}`);
     }
 
     const serviceKey = config.MOLIT_SERVICE_KEY;
@@ -76,7 +54,6 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
     // 각 지역코드별로 순차 요청
     for (const lawdCd of lawdCodes) {
       const responses = [];
-      let debugPrinted = false;
 
       // 병렬 요청 (2개씩 동시)
       for (let i = 0; i < 12; i += 2) {
@@ -93,7 +70,7 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
             LAWD_CD: lawdCd,
             DEAL_YMD: dealYmd,
             pageNo: 1,
-            numOfRows: 10,
+            numOfRows: 100,
           };
 
           requests.push(
@@ -118,30 +95,18 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
-      console.log(`[MOLIT DEBUG] District ${lawdCd}: Total responses: ${responses.length}`);
-      let successCount = 0;
       let districtItemCount = 0;
 
       for (const response of responses) {
-        if (!response || !response.data) {
-          console.log(`[MOLIT DEBUG] Skipped null response`);
+        if (!response || !response.data) continue;
+
+        let items: any[] = [];
+        try {
+          const parsed = await parseStringPromise(response.data);
+          items = parsed?.response?.body?.[0]?.items?.[0]?.item || [];
+        } catch (err) {
+          console.error(`[MOLIT API] XML parse error (LAWD_CD=${lawdCd}):`, err instanceof Error ? err.message : String(err));
           continue;
-        }
-
-        successCount++;
-        console.log(`[MOLIT DEBUG] Response ${successCount}: data size=${response.data.length}, status=${response.status}`);
-
-        const parsed = await parseStringPromise(response.data);
-        const items = parsed?.response?.body?.[0]?.items?.[0]?.item || [];
-
-
-        console.log(`[MOLIT DEBUG] Parsed items: ${Array.isArray(items) ? items.length : 'not array'}`);
-
-        // 첫 번째 아이템의 필드명 출력 (디버깅용) - 강남구에서 첫 번째로 아이템을 얻었을 때
-        if (items.length > 0 && lawdCd === '11110' && !debugPrinted) {
-          debugPrinted = true;
-          console.log(`\n[DEBUG] Raw item fields:`, Object.keys(items[0]));
-          console.log(`[DEBUG] First item structure:`, JSON.stringify(items[0], null, 2).substring(0, 800));
         }
 
         for (const item of items) {
@@ -151,9 +116,9 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
 
           const area = parseFloat(item.excluUseAr?.[0] || '0');
 
-          const sggNm = item.estateAgentSggNm?.[0] || '';
-          const roadNm = item.roadNm?.[0] || '';
-          const address = [sggNm, roadNm].filter(Boolean).join(' ');
+          // 지역명(구/시) + 법정동. (estateAgentSggNm은 중개사 소재지라 사용하지 않음)
+          const umdNm = (item.umdNm?.[0] || '').trim();
+          const address = [CODE_TO_NAME[lawdCd] || '', umdNm].filter(Boolean).join(' ');
 
           // 날짜는 분리되어 있음: dealYear, dealMonth, dealDay
           const dealYear = item.dealYear?.[0] || '';
@@ -166,7 +131,7 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
           if (dealAmount && dateStr) {
             allData.push({
               date: formatDate(dateStr),
-              price: Math.round(dealAmount / 10000),
+              price: dealAmount, // 만원 단위
               area,
               location: address,
               region,
@@ -176,16 +141,13 @@ export async function fetchMolitData(region: string = '서울'): Promise<EstateD
           }
         }
       }
-      console.log(`[MOLIT DEBUG] District ${lawdCd}: Added ${districtItemCount} items to allData. Total now: ${allData.length}`);
+      console.log(`[MOLIT API] ${lawdCd}: ${districtItemCount} items`);
     }
 
-    console.log(`[MOLIT DEBUG] Before sort: allData.length = ${allData.length}`);
     allData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    console.log(`[MOLIT DEBUG] After sort: allData.length = ${allData.length}`);
 
     if (allData.length > 0) {
-      console.log(`[MOLIT API] Successfully collected ${allData.length} REAL records for region: "${region}"`);
-      console.log(`[MOLIT DEBUG] Sample data:`, allData.slice(0, 3).map(d => ({ location: d.location, price: d.price })));
+      console.log(`[MOLIT API] Collected ${allData.length} real records for region: "${region}"`);
       const saved = await saveEstateRecords(allData);
       console.log(`[MOLIT API] Saved ${saved} records to database`);
       return allData;

@@ -29,3 +29,8 @@ backend/dist/
 *.swp
 *.swo
 *~
+
+# Logs
+*.log
+backend_error.txt
+shared/dist/
