@@ -171,8 +171,11 @@ app.get('/api/stats', async (req, res) => {
 
     console.log(`[API] /api/stats called with region: "${regionStr}"`);
 
-    // Fetch data from specified region
-    const allData = await fetchMolitData(regionStr);
+    let allData = dataCache[regionStr];
+    if (!allData) {
+      allData = await fetchMolitData(regionStr);
+      dataCache[regionStr] = allData;
+    }
     console.log(`[API] Fetched ${allData.length} records for region: "${regionStr}"`);
 
     // Filter by location if region is a specific district (서울 구)
